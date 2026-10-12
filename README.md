@@ -77,6 +77,4 @@ python ml/src/03_split.py         # genera data/splits/*.csv
 ## Preguntas para el profesor
 
 1. ¿Puedo usar PyTorch en lugar de TensorFlow?
-2. ¿Federated learning, distributed learning o ambos?
-3. ¿Los CSV de partición bastan como "guardar distribuciones" o quiere también conteos o gráficos?
-4. ¿El dataset debe ir dentro del repo o basta con un enlace?
+2. ¿Los CSV de partición bastan como "guardar distribuciones" o quiere también conteos o gráficos?

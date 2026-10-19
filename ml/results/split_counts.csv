@@ -1,0 +1,4 @@
+particion,sana,mala,total,pct_mala,pct_del_total
+train,850,255,1105,23.1,67.6
+val,150,45,195,23.1,11.9
+test,261,73,334,21.9,20.4

@@ -18,10 +18,12 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 - [x] Partición sobre los recortes propios
 - [x] Conteos y gráfico de la distribución por partición
 - [x] Entorno de entrenamiento: WSL2 + Ubuntu 24.04 + TensorFlow 2.21.0 con GPU verificada
+- [x] Repo clonado en Ubuntu y pipeline de datos reproducido allí (misma partición y mismos conteos)
+- [x] Data generator (pipeline `tf.data`), línea base
 - [ ] Confirmar la partición con el profesor
-- [ ] Clonar el repo en Ubuntu y copiar los recortes
-- [ ] Preprocesamiento y data generator, GAN
-- [ ] 5 modelos (3 CNN y 2 Transformers) con Federated Learning, hyperparameter tuning, validación cruzada, ensembles
+- [ ] GAN para la clase minoritaria (solo `train`)
+- [ ] Definir los 5 modelos (3 CNN y 2 Transformers) y los clientes de Federated Learning
+- [ ] Entrenamiento, hyperparameter tuning, validación cruzada, ensembles
 - [ ] Back-end, front-end, pruebas, deployment, monitoreo
 
 ## Descarga del dataset
@@ -53,7 +55,7 @@ Proyecto_IA(Cacao-Beans)/             (en Ubuntu: ~/cacao/)
 │   │   └── recortes_script/                   recortes propios del equipo
 │   │       ├── train/                         1300 .jpg (1000 sana, 300 mala)
 │   │       ├── val/                           334 .jpg (261 sana, 73 mala)
-│   │       ├── generar_recortes.py
+│   │       ├── generar_recortes.py            script que generó los recortes
 │   │       ├── LEEME.txt
 │   │       ├── log_train.csv
 │   │       ├── log_val.csv
@@ -68,17 +70,19 @@ Proyecto_IA(Cacao-Beans)/             (en Ubuntu: ~/cacao/)
         ├── inventory.csv
         ├── inventory_crops.csv
         ├── split_counts.csv
-        └── split_distribution.png
+        ├── split_distribution.png
+        └── pipeline_sample.png
 ```
 
 Cada CSV de `data/splits/` trae las columnas `origen`, `filename`, `path`, `label` y `md5`. La columna `path` es **relativa a la raíz del repo** (por ejemplo `data/processed/recortes_script/train/mala (1).jpg`), así que funciona igual en Windows y en Ubuntu si los scripts se ejecutan desde la raíz.
 
 ## Recortes propios (datos de entrenamiento)
 
-Los modelos se entrenan con recortes generados por el equipo a partir de las fotos originales de `dataset_original_train_val/`, con el script `generar_recortes.py` (OpenCV, sin filtros sobre la imagen). No se usa `dataset_cropped_allclasses`: trae un filtro que la app no aplica y no se sabe a qué foto original corresponde cada recorte.
+Los modelos se entrenan con recortes generados por el equipo a partir de las fotos originales de `dataset_original_train_val/`, con el script `generar_recortes.py` (OpenCV, sin filtros sobre la imagen). Ese script **no está versionado en este repo**: viene dentro de la carpeta `recortes_script/` que entrega el equipo (ver su `LEEME.txt` para el procedimiento). No se usa `dataset_cropped_allclasses`: trae un filtro que la app no aplica y no se sabe a qué foto original corresponde cada recorte.
 
 - `train/`: 1300 recortes (1000 sana, 300 mala) y `val/`: 334 recortes (261 sana, 73 mala).
 - **Verificado con `04_inventory_crops.py`:** conteos por clase iguales a los del LEEME, 0 archivos corruptos, 0 duplicados por md5, 0 contenido compartido entre train y val, y los logs coinciden con lo que hay en disco.
+- Tamaño: mediana 596x370 px, mínimo 340x201, máximo 1459x896.
 - La clase sale del nombre del archivo (`sana (N).jpg`, `mala (N).jpg`).
 - Varios nombres de `val/` repiten los de `train/` (son granos distintos): por eso los CSV identifican cada recorte por su ruta completa.
 
@@ -112,9 +116,26 @@ Limitación: con solo 73 granos `mala` en `test`, un error mueve el recall de es
 
 **Pendiente:** confirmar esta justificación con el profesor. Si exige 70/15/15 exacto, solo cambia `05_split.py` (juntar los 1634 y repartir) y hay que ajustar D-18 y RNF-07.
 
+## Pipeline de datos (data generator)
+
+`ml/src/07_data_pipeline.py` lee `data/splits/*.csv` y entrega los recortes por lotes con `tf.data`, sin cargar todo en memoria. Es la **línea base**: los parámetros se pueden cambiar y se comparan con `val` cuando haya modelos.
+
+| Decisión | Valor | Por qué |
+|---|---|---|
+| Tamaño de entrada | 224x224, configurable (`IMG_SIZE`) | Estándar para CNN y ViT; probar 384 más adelante (más detalle, pero más costo, y la app corre sin GPU) |
+| Redimensionado | Cuadrado sin deformar el grano, prolongando y suavizando el borde de cada recorte | Estirar deformaría el grano; ver nota de abajo |
+| Normalización | Ninguna en el pipeline (píxeles 0 a 255) | Cada modelo preentrenado exige su propio preprocesamiento y se aplica al armarlo |
+| Augmentation | Solo en `train`: volteo horizontal y vertical, brillo y contraste leves | `val` y `test` no se modifican; sin cambios de color porque el color distingue `sana` de `mala` (hipótesis, no verificada) |
+| Etiquetas | sana = 0, mala = 1 | |
+| Lote | 32 | 35 lotes en train, 7 en val, 11 en test |
+
+**Nota sobre el relleno.** Para volver cuadrado un recorte hay que añadir franjas. Con relleno blanco se veía un borde marcado contra el papel. Se midió el color del borde de 200 recortes de `train`: media (165, 165, 167), mínimo 121 y máximo 185 por canal, es decir un gris medio y no blanco. Además, la proporción ancho/alto difiere un poco entre clases (media 1,55 en `mala` y 1,62 en `sana`) y un clasificador que usa solo esa proporción logra F1 macro de 0,607 en `val` (adivinar daría cerca de 0,43). Como el relleno depende de la proporción, podría actuar como atajo. Por eso se prolonga el borde de cada recorte, suavizado a 16 valores, para que la franja se mezcle con el fondo. No está medido contra el relleno blanco: es una comparación pendiente, con `val`.
+
+![Muestra del pipeline](ml/results/pipeline_sample.png)
+
 ## Entorno de entrenamiento: WSL2 + TensorFlow con GPU
 
-TensorFlow es obligatorio (decisión del profesor). La documentación oficial indica que **desde la versión 2.11 TensorFlow no tiene soporte de GPU en Windows nativo**; para usar la GPU hay que usar WSL2. Por eso el entrenamiento se hace en Ubuntu dentro de WSL2, y el entorno `.venv` de Windows solo se usó para los scripts de datos.
+TensorFlow es obligatorio (decisión del profesor). La documentación oficial indica que **desde la versión 2.11 TensorFlow no tiene soporte de GPU en Windows nativo**; para usar la GPU hay que usar WSL2. Por eso el entrenamiento se hace en Ubuntu dentro de WSL2, y el entorno `.venv` de Windows solo se usó para los scripts de datos 00 a 06.
 
 Equipo de desarrollo: Windows 10 22H2, GPU NVIDIA RTX 3060 Ti (8 GB), driver 596.49.
 
@@ -125,6 +146,7 @@ Equipo de desarrollo: Windows 10 22H2, GPU NVIDIA RTX 3060 Ti (8 GB), driver 596
 | Sistema | WSL2, Ubuntu 24.04 |
 | Python | 3.12.3 (viene con Ubuntu 24.04) |
 | TensorFlow | 2.21.0 (`tensorflow[and-cuda]`) |
+| pandas / pillow / scikit-learn / matplotlib | 3.0.6 / 13.0.0 / 1.9.1 / 3.11.2 |
 | Entorno virtual | `~/entornos/tf` |
 
 Python 3.12 figura en las versiones soportadas por TensorFlow según la documentación oficial. Python 3.14 no aparece, y por eso no se usa para entrenar.
@@ -191,17 +213,32 @@ python -c "import tensorflow as tf; print(tf.__version__, tf.config.list_physica
 
 Salida esperada: `2.21.0 [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]`.
 
+### Clonar el repo en Ubuntu y copiar los recortes
+
+El repo se trabaja en el disco de Ubuntu (`~/cacao`), no en `/mnt/c`: leer miles de imágenes por `/mnt/c` es mucho más lento. Los recortes no están en Git, así que se copian una sola vez desde Windows:
+
+```bash
+cd ~
+git clone https://github.com/JulianSilvaMorales/Proyecto_IA-Cacao-Beans-.git cacao
+cp -r "/mnt/c/Users/USER/Documents/Proyecto_IA(Cacao-Beans)/data/processed/recortes_script" ~/cacao/data/processed/
+cd ~/cacao
+git config --global user.name "su-usuario-de-github"
+git config --global user.email "su-correo-de-github"
+```
+
+(Ajustar la ruta de Windows a cada equipo.) Al hacer `git push` desde Ubuntu, GitHub pide un token de acceso personal en lugar de la contraseña.
+
+**Verificado en Ubuntu:** `04_inventory_crops.py` y `05_split.py` dan los mismos conteos que en Windows (1000/300 y 261/73 en los recortes; 1105/195/334 en la partición), `git status` queda limpio (los CSV regenerados son idénticos a los versionados) y `06_counts_plot.py` da la misma tabla.
+
 ### Notas
 
-- El repo debe clonarse en el disco de Ubuntu (`~/cacao`), no trabajar desde `/mnt/c`: leer miles de imágenes por `/mnt/c` es mucho más lento.
-- Los recortes no están en Git: hay que copiarlos de Windows a `data/processed/recortes_script/` dentro del clon (pendiente de documentar cuando se haga).
-- Plan B si WSL2 diera problemas: Google Colab o Kaggle (hay que subir los recortes aparte y ajustar la ruta base de las imágenes).
+- Plan B si WSL2 diera problemas: Google Colab o Kaggle (hay que subir los recortes aparte y hacer configurable la ruta base de las imágenes).
 
-## Cómo reproducir los scripts de datos
+## Cómo reproducir
 
 1. Descargar y extraer el dataset en `data/raw/` (ver "Descarga del dataset").
 2. Copiar `recortes_script/` a `data/processed/recortes_script/`.
-3. Instalar dependencias: `pip install pandas pillow scikit-learn matplotlib`
+3. Crear el entorno con TensorFlow (ver "Entorno de entrenamiento"). Los scripts 04 a 07 se corrieron en Ubuntu; los 00 a 06 también funcionan en Windows con `pip install pandas pillow scikit-learn matplotlib`.
 4. Desde la raíz del proyecto, ejecutar en orden:
 
 ```
@@ -211,9 +248,10 @@ python ml/src/02_check_names.py      # revisa nombres repetidos
 python ml/src/04_inventory_crops.py  # inventario de los recortes propios -> ml/results/inventory_crops.csv
 python ml/src/05_split.py            # partición -> data/splits/*.csv
 python ml/src/06_counts_plot.py      # conteos y gráfico -> ml/results/
+TF_CPP_MIN_LOG_LEVEL=2 python ml/src/07_data_pipeline.py   # pipeline tf.data (requiere TensorFlow) -> ml/results/pipeline_sample.png
 ```
 
-Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cropped_allclasses`. El 03 se eliminó (era la partición sobre `cropped`). Los scripts 00 a 02 solo corren si `data/raw/` tiene el dataset completo; del 04 en adelante solo hacen falta los recortes y los CSV.
+Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cropped_allclasses`; solo corren con `data/raw/` completo. Del 04 en adelante solo hacen falta los recortes y los CSV. El 03 se eliminó (era la partición sobre `cropped`).
 
 ## Hallazgos de la auditoría del dataset original
 
@@ -231,10 +269,12 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 5. Se entrenan 5 modelos (3 CNN y 2 Transformers) con recortes propios, no con `cropped`.
 6. Partición sobre recortes propios: 85/15 del train del equipo + val del equipo como test (pendiente de confirmar con el profesor).
 7. Entrenamiento en WSL2 (Ubuntu 24.04) con TensorFlow 2.21.0 y la GPU local.
+8. Pipeline de datos de línea base: 224x224 configurable, relleno por borde suavizado, augmentation solo en `train` y sin cambios de color. Tamaño, relleno y augmentation se comparan con `val` más adelante.
+9. Meta de trabajo: F1 macro y exactitud de 95 %, medidas en `test`. Aún no está registrada en el documento de requerimientos (P-02). Con solo 73 `mala` en `test`, la cifra tiene un margen de incertidumbre amplio.
 
 ## Pendientes
 
 - Confirmar la partición ≈ 68/12/20 con el profesor.
-- Fijar la métrica y el valor mínimo (el equipo habla de 94,5 % o 95 %: aclarar si es F1 macro o exactitud).
+- Definir las 5 arquitecturas (3 CNN y 2 Transformers).
 - Definir cuántos clientes simulados tendrá el Federated Learning y cómo se reparte `train` entre ellos.
-- Copiar `generar_recortes.py` a `ml/src/` con su Header (o documentar su ubicación).
+- GAN para la clase minoritaria (solo `train`).

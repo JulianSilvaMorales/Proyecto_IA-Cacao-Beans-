@@ -4,6 +4,7 @@ Descripcion: Verifica si los archivos de cropped y de train/val corresponden
              a los mismos granos (comparando nombres de archivo).
 Fecha_creacion: 2026-10-09
 Actualizacion: 2026-10-09
+Autor: Julian Andres Silvas Morales
 Version: 1.0
 """
 import pandas as pd

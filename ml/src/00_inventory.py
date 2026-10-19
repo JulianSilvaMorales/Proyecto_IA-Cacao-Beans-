@@ -4,6 +4,7 @@ Descripcion: Inventario del dataset crudo: ruta, etiqueta (extraida del
              nombre), tamaño, integridad y hash para detectar duplicados.
 Fecha_creacion: 2026-10-09
 Actualizacion: 2026-10-09
+Autor: Julian Andres Silvas Morales
 Version: 1.1
 """
 import hashlib

@@ -4,6 +4,7 @@ Descripcion: Revisa los nombres repetidos entre train y val, y los nombres de
              cropped que no tienen foto original.
 Fecha_creacion: 2026-10-10
 Actualizacion: 2026-10-10
+Autor: Julian Andres Silvas Morales
 Version: 1.0
 """
 import pandas as pd

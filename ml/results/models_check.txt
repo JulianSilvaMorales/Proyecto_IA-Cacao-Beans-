@@ -1,0 +1,8 @@
+GPUs visibles: [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]
+Lote: 32 imagenes de 224x224, 3 repeticiones
+modelo           params (M)     salida  GPU ms/img  CPU ms/img
+MobileNetV3-L           4.2    (32, 2)       41.59       30.39
+EfficientNet-B0         4.1    (32, 2)        4.81       21.06
+ResNet-50              23.6    (32, 2)        2.70       30.58
+Swin-Tiny              27.5    (32, 2)        7.27       55.33
+DeiT-Small             21.7    (32, 2)        3.66       48.85

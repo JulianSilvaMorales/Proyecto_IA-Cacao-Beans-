@@ -8,7 +8,7 @@ Descripcion: Comprobacion de diagnostico. Entrena EfficientNet-B0 de forma
 Fecha_creacion: 2026-10-19
 Actualizacion: 2026-10-19
 Autor: Julian Andres Silvas Morales
-Version: 1.3
+Version: 1.4
 """
 import argparse
 import importlib
@@ -31,6 +31,8 @@ pipe = importlib.import_module("07_data_pipeline")
 
 SEED = 42
 ap = argparse.ArgumentParser()
+ap.add_argument("--model", default="EfficientNet-B0",
+                choices=["MobileNetV3-L", "EfficientNet-B0", "ResNet-50", "Swin-Tiny", "DeiT-Small"])
 ap.add_argument("--epochs", type=int, default=5)
 ap.add_argument("--lr", type=float, default=1e-4)
 ap.add_argument("--freeze-bn", action="store_true")
@@ -40,8 +42,14 @@ ap.add_argument("--head-epochs", type=int, default=0,
 args = ap.parse_args()
 keras.utils.set_random_seed(SEED)
 
-PRESET = "efficientnet_b0_ra4_e3600_r224_imagenet"
-cls = kh.models.EfficientNetImageClassifier
+MODELOS = {
+    "MobileNetV3-L": (kh.models.MobileNetImageClassifier, "mobilenet_v3_large_100_imagenet"),
+    "EfficientNet-B0": (kh.models.EfficientNetImageClassifier, "efficientnet_b0_ra4_e3600_r224_imagenet"),
+    "ResNet-50": (kh.models.ResNetImageClassifier, "resnet_50_imagenet"),
+    "Swin-Tiny": (kh.models.SwinTransformerImageClassifier, "swin_tiny_patch4_window7_224"),
+    "DeiT-Small": (kh.models.DeiTImageClassifier, "deit_small_distilled_patch16_224_imagenet"),
+}
+cls, PRESET = MODELOS[args.model]
 _tmp = cls.from_preset(PRESET, num_classes=2)
 conv = _tmp.preprocessor.image_converter
 del _tmp

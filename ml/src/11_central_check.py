@@ -8,7 +8,7 @@ Descripcion: Comprobacion de diagnostico. Entrena EfficientNet-B0 de forma
 Fecha_creacion: 2026-10-19
 Actualizacion: 2026-10-19
 Autor: Julian Andres Silvas Morales
-Version: 1.2
+Version: 1.3
 """
 import argparse
 import importlib
@@ -35,6 +35,8 @@ ap.add_argument("--epochs", type=int, default=5)
 ap.add_argument("--lr", type=float, default=1e-4)
 ap.add_argument("--freeze-bn", action="store_true")
 ap.add_argument("--clipnorm", type=float, default=None)
+ap.add_argument("--head-epochs", type=int, default=0,
+                help="epocas iniciales entrenando solo la cabeza (red congelada)")
 args = ap.parse_args()
 keras.utils.set_random_seed(SEED)
 
@@ -84,7 +86,24 @@ def medir(ds, y):
 
 print(f"Centralizado: {n} imagenes de train | peso de clase [sana, mala]: "
       f"{[round(float(v), 2) for v in cw.numpy()]} | lr {args.lr}", flush=True)
+def compilar(lr):
+    model.compile(optimizer=keras.optimizers.Adam(lr, clipnorm=args.clipnorm),
+                  loss=keras.losses.SparseCategoricalCrossentropy())
+
+
+if args.head_epochs > 0:
+    # Fase 1: solo la cabeza (la red preentrenada se congela)
+    model.backbone.trainable = False
+    compilar(args.lr)
+    print("Fase 1: solo cabeza, backbone congelado", flush=True)
 for e in range(1, args.epochs + 1):
+    if args.head_epochs > 0 and e == args.head_epochs + 1:
+        # Fase 2: se descongela todo (BatchNorm sigue congelada) con lr / 10
+        model.backbone.trainable = True
+        if args.freeze_bn:
+            congelar_bn(model)
+        compilar(args.lr / 10)
+        print(f"Fase 2: red completa, lr {args.lr / 10:g}", flush=True)
     t0 = time.time()
     h = model.fit(train_ds, epochs=1, verbose=0)
     f1t, acct, rect = medir(train_eval, y_tr)

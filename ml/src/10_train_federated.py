@@ -9,7 +9,7 @@ Descripcion: Entrenamiento con Federated Learning (FedAvg simulado) de un
 Fecha_creacion: 2026-10-19
 Actualizacion: 2026-10-19
 Autor: Julian Andres Silvas Morales
-Version: 1.3
+Version: 1.4
 Uso (desde la raiz del repo):
     python ml/src/10_train_federated.py --model EfficientNet-B0 --rounds 2 \\
         --local-epochs 1 --lr 1e-4 --tag smoke
@@ -136,6 +136,22 @@ if state_f.exists():
     model.load_weights(run_dir / "last.weights.h5")
     print(f"Reanudando desde la ronda {state['round']} (mejor F1 val {state['best_f1']:.4f})")
 
+# Se compila UNA sola vez: recompilar por cliente costaba ~20 s extra por cliente
+model.compile(optimizer=keras.optimizers.Adam(args.lr, clipnorm=args.clipnorm),
+              loss=keras.losses.SparseCategoricalCrossentropy(), jit_compile=False)
+
+def reiniciar_optimizador(m):
+    """Pone a cero los momentos de Adam y el contador de pasos SIN tocar la tasa
+    de aprendizaje (que tambien es una variable del optimizador)."""
+    for v in m.optimizer.variables:
+        nombre = (getattr(v, "path", None) or v.name).lower()
+        if "learning_rate" in nombre:
+            continue
+        v.assign(tf.zeros_like(v))
+    lr_actual = float(m.optimizer.learning_rate)
+    assert abs(lr_actual - args.lr) < 1e-12, f"la tasa de aprendizaje quedo en {lr_actual}"
+
+
 # --- FedAvg ----------------------------------------------------------------
 for r in range(state["round"] + 1, args.rounds + 1):
     t0 = time.time()
@@ -143,9 +159,7 @@ for r in range(state["round"] + 1, args.rounds + 1):
     locales = []
     for k in range(N_CLIENTS):
         model.set_weights(g)
-        model.compile(optimizer=keras.optimizers.Adam(args.lr, clipnorm=args.clipnorm),
-                      loss=keras.losses.SparseCategoricalCrossentropy(),
-                      jit_compile=False)
+        reiniciar_optimizador(model)             # optimizador "nuevo" por cliente
         model.fit(client_ds[k], epochs=args.local_epochs, verbose=0)
         locales.append(model.get_weights())
     promedio = [np.average(np.stack(ws), axis=0, weights=sizes).astype(ws[0].dtype)

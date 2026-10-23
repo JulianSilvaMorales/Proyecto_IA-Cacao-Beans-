@@ -1,14 +1,17 @@
 """
 Nombre: 11_central_check.py
-Descripcion: Comprobacion de diagnostico. Entrena EfficientNet-B0 de forma
-             CENTRALIZADA (todo train junto, sin Federated Learning) con el
-             mismo pipeline y preprocesamiento, y mide F1 macro y exactitud en
-             train (sin augmentation) y en val tras cada epoca. Sirve para
-             separar si un mal resultado viene de FedAvg o del resto. NO usa test.
+Descripcion: Comprobacion de diagnostico. Entrena el modelo elegido con --model
+             de forma CENTRALIZADA (todo train junto, sin Federated Learning)
+             con el mismo pipeline y preprocesamiento, y mide F1 macro y
+             exactitud en train (sin augmentation) y en val tras cada epoca.
+             Sirve para separar si un mal resultado viene de FedAvg o del resto,
+             y para la cuadricula de tasas. NO usa test.
+             v1.5: congela TODAS las BatchNorm y el modelo entrega logits
+             (mismas correcciones que 10_train_federated.py v1.6).
 Fecha_creacion: 2026-10-19
-Actualizacion: 2026-10-19
+Actualizacion: 2026-10-23
 Autor: Julian Andres Silvas Morales
-Version: 1.4
+Version: 1.5
 """
 import argparse
 import importlib
@@ -53,22 +56,23 @@ cls, PRESET = MODELOS[args.model]
 _tmp = cls.from_preset(PRESET, num_classes=2)
 conv = _tmp.preprocessor.image_converter
 del _tmp
-model = cls.from_preset(PRESET, num_classes=2, activation="softmax", preprocessor=None)
+# Sin softmax: logits + from_logits=True (MobileNet ignora activation="softmax")
+model = cls.from_preset(PRESET, num_classes=2, activation=None, preprocessor=None)
 
 
-def congelar_bn(layer):
-    n = 1 if isinstance(layer, keras.layers.BatchNormalization) else 0
-    if n:
-        layer.trainable = False
-    for sub in getattr(layer, "layers", None) or []:
-        n += congelar_bn(sub)
-    return n
+def congelar_bn(m):
+    """Congela TODAS las BatchNormalization, incluidas las de bloques sin .layers."""
+    bns = [l for l in m._flatten_layers(include_self=False, recursive=True)
+           if isinstance(l, keras.layers.BatchNormalization)]
+    for l in bns:
+        l.trainable = False
+    return len(bns)
 
 
 if args.freeze_bn:
     print("BatchNorm congeladas:", congelar_bn(model), flush=True)
 model.compile(optimizer=keras.optimizers.Adam(args.lr, clipnorm=args.clipnorm),
-              loss=keras.losses.SparseCategoricalCrossentropy())
+              loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True))
 
 tr_df = pd.read_csv("data/splits/train.csv")
 va_df = pd.read_csv("data/splits/val.csv")
@@ -96,7 +100,7 @@ print(f"Centralizado: {n} imagenes de train | peso de clase [sana, mala]: "
       f"{[round(float(v), 2) for v in cw.numpy()]} | lr {args.lr}", flush=True)
 def compilar(lr):
     model.compile(optimizer=keras.optimizers.Adam(lr, clipnorm=args.clipnorm),
-                  loss=keras.losses.SparseCategoricalCrossentropy())
+                  loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True))
 
 
 if args.head_epochs > 0:

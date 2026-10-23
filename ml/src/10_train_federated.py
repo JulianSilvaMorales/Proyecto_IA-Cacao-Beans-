@@ -6,10 +6,12 @@ Descripcion: Entrenamiento con Federated Learning (FedAvg simulado) de un
              el servidor promedia los pesos (ponderado por tamano), y se mide
              F1 macro y exactitud en val. Guarda el mejor modelo por F1 macro en
              val y un checkpoint por ronda para reanudar. NO usa test.
+             v1.6: congela TODAS las BatchNorm (antes MobileNet solo 1 de 46) y
+             el modelo entrega logits (MobileNet ignoraba activation="softmax").
 Fecha_creacion: 2026-10-19
-Actualizacion: 2026-10-19
+Actualizacion: 2026-10-23
 Autor: Julian Andres Silvas Morales
-Version: 1.4
+Version: 1.6
 Uso (desde la raiz del repo):
     python ml/src/10_train_federated.py --model EfficientNet-B0 --rounds 2 \\
         --local-epochs 1 --lr 1e-4 --tag smoke
@@ -68,19 +70,21 @@ cls, preset = MODELOS[args.model]
 _tmp = cls.from_preset(preset, num_classes=2)
 conv = _tmp.preprocessor.image_converter
 del _tmp
-model = cls.from_preset(preset, num_classes=2, activation="softmax", preprocessor=None)
+# Sin softmax: el modelo entrega logits y la perdida usa from_logits=True.
+# MobileNetImageClassifier ignora activation="softmax" (verificado en 15_diag_bn_softmax.py).
+model = cls.from_preset(preset, num_classes=2, activation=None, preprocessor=None)
 print("preprocessor del modelo (debe ser None):", model.preprocessor)
 print(f"Modelo: {args.model} ({preset}) | converter: {type(conv).__name__}")
 
 
-def congelar_bn(layer):
-    """Pone trainable=False a toda BatchNormalization (corre en modo inferencia)."""
-    n = 1 if isinstance(layer, keras.layers.BatchNormalization) else 0
-    if n:
-        layer.trainable = False
-    for sub in getattr(layer, "layers", None) or []:
-        n += congelar_bn(sub)
-    return n
+def congelar_bn(m):
+    """Pone trainable=False a TODA BatchNormalization (corre en modo inferencia),
+    incluidas las de bloques que no exponen .layers (MobileNet de KerasHub)."""
+    bns = [l for l in m._flatten_layers(include_self=False, recursive=True)
+           if isinstance(l, keras.layers.BatchNormalization)]
+    for l in bns:
+        l.trainable = False
+    return len(bns)
 
 
 if args.freeze_bn:
@@ -114,7 +118,7 @@ val_ds = prep(pipe.make_dataset("val", training=False))
 
 # --- comprobaciones iniciales (verifican los supuestos) ----------------------
 xb, yb, wb = next(iter(client_ds[0]))
-pb = model(xb, training=False).numpy()
+pb = tf.nn.softmax(model(xb, training=False)).numpy()
 print("Lote:", xb.shape, "| salida:", pb.shape,
       "| suma de probabilidades por fila (debe ser ~1):", round(float(pb.sum(1).mean()), 3))
 
@@ -138,7 +142,8 @@ if state_f.exists():
 
 # Se compila UNA sola vez: recompilar por cliente costaba ~20 s extra por cliente
 model.compile(optimizer=keras.optimizers.Adam(args.lr, clipnorm=args.clipnorm),
-              loss=keras.losses.SparseCategoricalCrossentropy(), jit_compile=False)
+              loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+              jit_compile=False)
 
 def reiniciar_optimizador(m):
     """Pone a cero los momentos de Adam y el contador de pasos SIN tocar la tasa

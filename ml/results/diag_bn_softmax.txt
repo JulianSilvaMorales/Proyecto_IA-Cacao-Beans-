@@ -1,0 +1,41 @@
+Nombre: diag_bn_softmax.txt
+Descripcion: Resumen de los resultados de 15_diag_bn_softmax.py (fallo de MobileNetV3-L y
+             explosion de EfficientNet-B0 con lr 1e-4). Logs completos fuera del repo:
+             ~/diag_mobilenet.log (parte B) y ~/diag15_a.log (parte A).
+Fecha_creacion: 2026-10-23
+Actualizacion: 2026-10-23
+Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
+Version: 1.0
+
+PARTE A: montaje de los 5 modelos (sin entrenar, lote de 32 de val)
+modelo           BN existentes  BN alcanzadas por      salida con              media de la salida
+                                congelar_bn antigua    activation="softmax"    (softmax => 0,500)
+MobileNetV3-L          46              1               linear (NO aplica)          0.222
+EfficientNet-B0        49             49               softmax                     0.500
+ResNet-50              53             53               softmax                     0.500
+Swin-Tiny               0              0               softmax                     0.500
+DeiT-Small              0              0               softmax                     0.500
+Con activation=None los 5 entregan logits (32, 2) y softmax(logits) suma 1,000.
+
+PARTE B: 70 pasos (~2 epocas), Adam + clipnorm 1.0, peso por clase, salida con softmax pedido
+1) MobileNetV3-L, congelar_bn antigua (1/46 BN), lr 3e-5 (reproduce la cuadricula):
+   paso 1 perdida 4.11 | paso 10 perdida 3.17, P(mala) 0.000 para las 32 imagenes
+   pasos 10-70: P(mala) 0.000 desv 0.0000 (la salida no son probabilidades: valores negativos)
+2) MobileNetV3-L, las 46 BN congeladas, lr 3e-5:
+   aprende algo: P(mala) desv 0.18-0.32 entre imagenes, perdida baja a 0.26-0.47,
+   pero la perdida sigue calculandose sobre una salida sin softmax (no es valida).
+3) EfficientNet-B0, 49/49 BN congeladas, lr 1e-4:
+   la entrada a la cabeza pasa de |max| ~4 (paso 10) a 1.9e5 (paso 20) y 2.2e6 (paso 30),
+   perdida 4.9e4 en el paso 30; luego colapsa (desv entre imagenes 0.009 en el paso 60).
+
+CONCLUSIONES
+- MEDIDO: congelar_bn antigua solo alcanzaba 1 de las 46 BatchNorm de MobileNet (sus bloques
+  no exponen .layers). Corregido con _flatten_layers en 10 v1.6 y 11 v1.5.
+- MEDIDO: MobileNetImageClassifier (keras-hub 0.32.0) ignora activation="softmax": la perdida
+  de MobileNet en la cuadricula antigua se calculaba sobre valores que no son probabilidades.
+  Corregido: los 5 modelos se cargan con activation=None y la perdida usa from_logits=True
+  (para los otros 4 es matematicamente equivalente; Keras ya usaba los logits).
+- Las filas de la cuadricula de EfficientNet-B0, ResNet-50, Swin-Tiny y DeiT-Small siguen
+  siendo validas (no estaban afectadas). La fila de MobileNetV3-L se repite (logs *_v2).
+- HIPOTESIS (no aislada): la explosion con lr 1e-4 viene de que una BatchNorm congelada ya no
+  renormaliza las activaciones y Adam mueve todos los pesos a la vez; con 1e-5 a 3e-5 es estable.

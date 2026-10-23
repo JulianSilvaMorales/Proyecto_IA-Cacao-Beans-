@@ -23,13 +23,15 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 - [x] Ciclo de Federated Learning (FedAvg propio) con checkpoints; compila una sola vez (ronda ≈ 22 s con EfficientNet-B0)
 - [x] Cuadrícula de tasas de aprendizaje para los 5 modelos (entrenamiento **centralizado**, 20 épocas)
 - [x] MobileNetV3-L corregido (congelaba 1 de 46 BatchNorm e ignoraba el softmax); repetida su fila de la cuadrícula
+- [x] Validación cruzada de 5 particiones de los 5 modelos: techo medido (F1 macro ≈ 0,69, IC 95 % ≈ 0,66–0,72); 384 px y sobremuestreo de `mala` no mejoran
+- [ ] Hyperparameter tuning con Hyperband (`17_hyperband.py`, escrito, sin ejecutar)
 - [ ] Confirmar la partición con el profesor
 - [ ] **Entrenamiento formal de los 5 modelos con Federated Learning** (no se ha hecho)
-- [ ] Hyperparameter tuning completo, validación cruzada, ensembles, GAN
+- [ ] Ensembles y GAN
 - [ ] Medición final en `test` (una sola vez)
 - [ ] Back-end, front-end, pruebas, deployment, monitoreo
 
-**Meta de trabajo:** F1 macro y exactitud de 95 %, medidas en `test`. **Todavía no se ha alcanzado y con lo medido hasta ahora no hay evidencia de que sea alcanzable con estos recortes** (ver "Resultados de diagnóstico").
+**Meta de trabajo:** F1 macro y exactitud de 95 %, medidas en `test`. **No es alcanzable con estos recortes:** la validación cruzada de los 5 modelos mide un techo de F1 macro ≈ 0,69 (IC 95 % ≈ 0,66–0,72) y exactitud ≈ 0,77 (ver "Validación cruzada"). Qué valor se registra en P-02 lo deciden el equipo y el profesor.
 
 ## Descarga del dataset
 
@@ -80,7 +82,9 @@ Proyecto_IA(Cacao-Beans)/             (en Ubuntu: ~/cacao/)
         ├── models_check.txt
         ├── federated_counts.csv
         ├── errors_val.png
-        └── diag_bn_softmax.txt
+        ├── diag_bn_softmax.txt
+        ├── cv_ceiling/                validación cruzada: <modelo>_<tamaño>_folds.csv y _resumen.txt
+        └── hyperband/                 Hyperband: <modelo>_trials.csv y _resumen.txt
 ```
 
 Fuera del repo (no se versiona): `~/cacao_runs/` guarda los checkpoints y el historial de cada entrenamiento, `~/tune/` guarda los logs de la cuadrícula de tasas y `~/.cache/kagglehub/` guarda los pesos preentrenados descargados.
@@ -160,6 +164,7 @@ Equipo de desarrollo: Windows 10 22H2, GPU NVIDIA RTX 3060 Ti (8 GB), driver 596
 | Python | 3.12.3 (viene con Ubuntu 24.04) |
 | TensorFlow / Keras | 2.21.0 (`tensorflow[and-cuda]`) / 3.15.1 |
 | keras-hub | 0.32.0 (modelos preentrenados) |
+| keras-tuner | 1.4.8 (Hyperband; instalado el 23-oct, comprobado con `--dry-run` que no cambia TensorFlow, Keras ni numpy) |
 | pandas / pillow / scikit-learn / matplotlib | 3.0.6 / 13.0.0 / 1.9.1 / 3.11.2 |
 | Entorno virtual | `~/entornos/tf` |
 
@@ -352,6 +357,33 @@ Lectura honesta:
 - Posibles causas, **sin comprobar**: la etiqueta se asignó por morfología y fermentación (D-17 del documento ya reconoce que el modelo mira solo el exterior); en una cuadrícula de errores (`ml/results/errors_val.png`) varias `mala` mal clasificadas se parecen a `sana` a simple vista y algunas `sana` tienen manchas blancas parecidas a las de `mala`; entre las `mala` bien clasificadas se ve más negro, puntos blancos y moho.
 - **MobileNetV3-L ya aprende** tras corregir sus dos fallos de montaje (punto 9 de "Lecciones"): 0,726 con lr 1e-5, al nivel de los demás. Su tiempo en GPU de `08_check_models.py` sigue sin explicar (no afecta al entrenamiento).
 
+## Validación cruzada: techo de rendimiento (Topic 3)
+
+`val` tiene solo 45 `mala`, así que sus cifras tienen un ruido de ±0,05. Para medir el techo con rigor, `16_cv_ceiling.py` hace una **validación cruzada estratificada de 5 particiones sobre `train` + `val` (1300 recortes, 300 `mala`)**, con entrenamiento centralizado y la misma configuración de la cuadrícula (BatchNorm congeladas, clipnorm 1,0, logits, pesos de clase, tasa de la cuadrícula, 15 épocas). Las particiones se generan en memoria (semilla 42): **no cambia `data/splits/` ni usa `test`**. Cada grano recibe una predicción "fuera de partición" y el intervalo de confianza del 95 % sale por bootstrap (2000 remuestras). Resúmenes en `ml/results/cv_ceiling/`.
+
+| Configuración | F1 macro, época 15 (IC 95 %) | F1 macro, mejor época* | Exactitud | Recall `mala` | Recall `sana` |
+|---|---|---|---|---|---|
+| EfficientNet-B0, 224, lr 1e-5 | 0,692 (0,664–0,721) | 0,698 (época 10) | 0,778 | 0,54 | 0,85 |
+| MobileNetV3-L, 224, lr 1e-5 | 0,692 (0,663–0,721) | 0,703 (época 11) | 0,763 | 0,61 | 0,81 |
+| ResNet-50, 224, lr 3e-5 | 0,692 (0,661–0,718) | 0,689 (época 13) | 0,765 | 0,60 | 0,82 |
+| Swin-Tiny, 224, lr 1e-5 | 0,689 (0,659–0,718) | 0,698 (época 3) | 0,785 | 0,50 | 0,87 |
+| DeiT-Small, 224, lr 1e-5 | 0,652 (0,620–0,682) | 0,693 (época 11) | 0,779 | 0,38 | 0,90 |
+| EfficientNet-B0, **384** | 0,674 (0,647–0,702) | 0,697 (época 8) | 0,751 | 0,58 | 0,80 |
+| MobileNetV3-L, **384** | 0,695 (0,665–0,723) | 0,695 (época 15) | 0,765 | 0,62 | 0,81 |
+| EfficientNet-B0, 224, **sobremuestreo de `mala` ×3** (sin pesos de clase) | 0,651 (0,622–0,680) | 0,674 (época 6) | 0,734 | 0,53 | 0,79 |
+
+\*Época con mejor F1 medio de las 5 particiones: algo optimista, porque se elige con los mismos datos. Exactitud y recalls de la tabla: época 15.
+
+Referencias: predecir siempre `sana` da F1 ≈ 0,43 (exactitud 0,77); usar solo la proporción ancho/alto, 0,54.
+
+Lectura (medido):
+
+- **El techo con estos datos es F1 macro ≈ 0,69, con intervalo ≈ 0,66 a 0,72**, exactitud ≈ 0,76 a 0,79 y recall de `mala` ≈ 0,5 a 0,6. Los 5 modelos, CNN y Transformers, quedan en el mismo nivel: **ninguno se separa del resto** (los intervalos se solapan). El 0,72–0,73 que se veía en `val` para ResNet y Swin era ruido.
+- **384 px no mejora** frente a 224. **Sobremuestrear `mala` empeora** frente a los pesos de clase y es más inestable. Ajustar el umbral apenas sube el F1 (≈ +0,01, y de forma optimista).
+- **El número de épocas importa y depende del modelo:** Swin alcanza su mejor nivel en la época 3 y DeiT pierde recall de `mala` al seguir entrenando (0,693 en la época 11 frente a 0,652 en la 15). Por eso las épocas se fijan con Hyperband (`17_hyperband.py`, Topic 2) antes del entrenamiento formal.
+- El modelo es inestable entre épocas: en una misma partición el recall de `mala` puede saltar de 0,4 a 0,9. Hay muchos granos en la frontera entre clases.
+- **La meta de 95 % no es alcanzable con estos recortes**: el intervalo medido está más de 20 puntos por debajo y ninguna palanca técnica probada (arquitectura, resolución, balanceo, umbral) movió el techo. Explicación más probable, **sin comprobar**: el exterior del grano no basta para reproducir una etiqueta asignada también por fermentación (coherente con D-17).
+
 ## Cómo reproducir
 
 1. Descargar y extraer el dataset en `data/raw/` (ver "Descarga del dataset").
@@ -386,6 +418,8 @@ Scripts de diagnóstico (no son parte del entrenamiento final):
 - `12_feature_probe.py` y `13_probe_cv.py`: sondeo lineal sobre características congeladas.
 - `14_errors_view.py`: cuadrícula de aciertos y errores.
 - `15_diag_bn_softmax.py`: comprueba el montaje de los 5 modelos (BatchNorm congeladas y si la salida aplica softmax). Con `--entrenar` repite las corridas cortas que encontraron el fallo de MobileNet.
+- `16_cv_ceiling.py`: validación cruzada de 5 particiones sobre `train` + `val` con intervalos por bootstrap. Opciones `--model --lr --epochs --img-size --oversample`. No usa `test`.
+- `17_hyperband.py`: Hyperband (keras-tuner) por modelo sobre la tasa, el weight decay de AdamW y las épocas, con objetivo F1 macro en `val`. Opciones `--model --max-epochs --factor`. Estado en `~/cacao_runs/hyperband/` (reanuda si se corta). No usa `test`.
 
 Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cropped_allclasses`; solo corren con `data/raw/` completo. El 03 se eliminó (era la partición sobre `cropped`).
 
@@ -408,8 +442,9 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 7. Entrenamiento en WSL2 (Ubuntu 24.04) con TensorFlow 2.21.0 y la GPU local.
 8. Pipeline de datos de línea base: 224x224 configurable, relleno por borde suavizado, augmentation solo en `train` y sin cambios de color.
 9. Modelos preentrenados (transfer learning) con las 5 arquitecturas de la tabla (no confirmado con el profesor); 5 clientes de Federated Learning con reparto estratificado y FedAvg propio.
-10. Meta de trabajo: F1 macro y exactitud de 95 %, medidas en `test`. Aún no está registrada en el documento de requerimientos (P-02).
+10. Meta de trabajo: F1 macro y exactitud de 95 %, medidas en `test`. Aún no está registrada en el documento de requerimientos (P-02). La validación cruzada muestra que no es alcanzable con estos recortes (ver "Validación cruzada"); el valor de P-02 lo deciden el equipo y el profesor.
 11. La selección de tasa y de ronda se hace con `val`; `test` se mide una sola vez al final.
+12. Tamaño de entrada 224 (384 no mejora en la validación cruzada) y balanceo con pesos de clase (el sobremuestreo de `mala` empeora).
 
 ## Notas para el equipo (pendientes fuera del módulo de IA)
 
@@ -430,9 +465,10 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 
 ## Pendientes
 
-- Entrenar formalmente los 5 modelos con Federated Learning (rondas, épocas locales y tasa por modelo) y comparar con `val`.
-- Hyperparameter tuning completo (Topic 2), validación cruzada (Topic 3), ensembles (Topic 5) y GAN para la clase minoritaria (solo `train`).
-- Comparar con `val` el relleno (blanco contra borde suavizado), el tamaño (224 contra 384) y el augmentation.
+- Ejecutar Hyperband para los 5 modelos (`17_hyperband.py`) y fijar la tasa, el weight decay y las épocas de cada uno.
+- Entrenar formalmente los 5 modelos con Federated Learning con esos hiperparámetros y comparar con `val`.
+- Ensembles (Topic 5) y GAN para la clase minoritaria (solo `train`). Ojo: el sobremuestreo de `mala` ya empeoró en la validación cruzada.
+- Comparar con `val` el relleno (blanco contra borde suavizado) y el augmentation. (224 contra 384 ya está medido: 384 no mejora.)
 - Medir `test` una sola vez al final, y el tiempo por grano en una CPU parecida a la t4g.medium (D-18).
 - Confirmar con el profesor la partición ≈ 68/12/20 y el uso de modelos preentrenados.
 - Registrar la meta en P-02 del documento de requerimientos y decidir (equipo y profesor) qué se reporta si no se alcanza el 95 %.

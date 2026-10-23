@@ -1,0 +1,20 @@
+Nombre: MobileNetV3-L_224_resumen.txt
+Descripcion: validacion cruzada de 5 particiones sobre train+val (1300), MobileNetV3-L_224, lr 1e-05, 15 epocas. Generado por 16_cv_ceiling.py v1.0. NO usa test.
+Fecha: 2026-10-23 | tiempo total 6.3 min
+
+F1 macro medio por epoca (media +- desv de las 5 particiones):
+  1:0.593 2:0.650 3:0.633 4:0.658 5:0.668 6:0.674 7:0.670 8:0.682 9:0.679 10:0.664 11:0.703 12:0.678 13:0.671 14:0.670 15:0.693
+
+EPOCA FINAL (epoca 15):
+  f1_macro     OOF 0.692  IC95 [0.663, 0.721]  | por particion 0.693 +- 0.040
+  acc          OOF 0.763  IC95 [0.740, 0.785]  | por particion 0.763 +- 0.039
+  recall_mala  OOF 0.613  IC95 [0.557, 0.669]  | por particion 0.613 +- 0.038
+  recall_sana  OOF 0.808  IC95 [0.784, 0.831]  | por particion 0.808 +- 0.049
+  umbral que maximiza F1 (OPTIMISTA, elegido con los mismos datos): 0.60 -> F1 0.704 acc 0.788 rec.mala 0.550 rec.sana 0.860
+
+MEJOR EPOCA SEGUN LA MEDIA (algo optimista) (epoca 11):
+  f1_macro     OOF 0.703  IC95 [0.675, 0.731]  | por particion 0.703 +- 0.024
+  acc          OOF 0.773  IC95 [0.751, 0.795]  | por particion 0.773 +- 0.017
+  recall_mala  OOF 0.623  IC95 [0.567, 0.678]  | por particion 0.623 +- 0.055
+  recall_sana  OOF 0.818  IC95 [0.795, 0.841]  | por particion 0.818 +- 0.015
+  umbral que maximiza F1 (OPTIMISTA, elegido con los mismos datos): 0.56 -> F1 0.707 acc 0.789 rec.mala 0.560 rec.sana 0.858

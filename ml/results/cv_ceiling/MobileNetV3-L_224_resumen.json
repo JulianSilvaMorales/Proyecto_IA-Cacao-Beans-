@@ -1,0 +1,12 @@
+{
+  "tag": "MobileNetV3-L_224",
+  "lr": 1e-05,
+  "epochs": 15,
+  "mejor_epoca": 11,
+  "final": {
+    "f1_macro": 0.6921,
+    "acc": 0.7631,
+    "recall_mala": 0.6133,
+    "recall_sana": 0.808
+  }
+}

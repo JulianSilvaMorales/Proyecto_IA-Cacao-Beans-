@@ -1,0 +1,20 @@
+Nombre: EfficientNet-B0_224_os_resumen.txt
+Descripcion: validacion cruzada de 5 particiones sobre train+val (1300), EfficientNet-B0_224_os, lr 1e-05, 15 epocas. Generado por 16_cv_ceiling.py v1.0. NO usa test.
+Fecha: 2026-10-23 | tiempo total 9.2 min
+
+F1 macro medio por epoca (media +- desv de las 5 particiones):
+  1:0.648 2:0.651 3:0.644 4:0.662 5:0.649 6:0.675 7:0.653 8:0.653 9:0.665 10:0.656 11:0.664 12:0.656 13:0.644 14:0.618 15:0.643
+
+EPOCA FINAL (epoca 15):
+  f1_macro     OOF 0.651  IC95 [0.622, 0.680]  | por particion 0.643 +- 0.025
+  acc          OOF 0.734  IC95 [0.710, 0.758]  | por particion 0.734 +- 0.047
+  recall_mala  OOF 0.533  IC95 [0.478, 0.592]  | por particion 0.533 +- 0.200
+  recall_sana  OOF 0.794  IC95 [0.768, 0.818]  | por particion 0.794 +- 0.117
+  umbral que maximiza F1 (OPTIMISTA, elegido con los mismos datos): 0.76 -> F1 0.665 acc 0.767 rec.mala 0.467 rec.sana 0.857
+
+MEJOR EPOCA SEGUN LA MEDIA (algo optimista) (epoca 6):
+  f1_macro     OOF 0.674  IC95 [0.644, 0.702]  | por particion 0.675 +- 0.047
+  acc          OOF 0.743  IC95 [0.718, 0.767]  | por particion 0.743 +- 0.058
+  recall_mala  OOF 0.610  IC95 [0.554, 0.664]  | por particion 0.610 +- 0.051
+  recall_sana  OOF 0.783  IC95 [0.757, 0.808]  | por particion 0.783 +- 0.086
+  umbral que maximiza F1 (OPTIMISTA, elegido con los mismos datos): 0.55 -> F1 0.680 acc 0.755 rec.mala 0.590 rec.sana 0.804

@@ -1,0 +1,12 @@
+{
+  "tag": "EfficientNet-B0_384",
+  "lr": 1e-05,
+  "epochs": 15,
+  "mejor_epoca": 8,
+  "final": {
+    "f1_macro": 0.6743,
+    "acc": 0.7508,
+    "recall_mala": 0.5767,
+    "recall_sana": 0.803
+  }
+}

@@ -18,16 +18,18 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 - [x] Partición sobre los recortes propios, conteos y gráfico
 - [x] Entorno de entrenamiento: WSL2 + Ubuntu 24.04 + TensorFlow 2.21.0 con GPU verificada
 - [x] Data generator (pipeline `tf.data`), línea base
-- [x] Elección de las 5 arquitecturas (3 CNN y 2 Transformers) y comprobación de que cargan
+- [x] Elección de las 5 arquitecturas (3 CNN y 2 Transformers); los 5 cargan con 2 clases
 - [x] Reparto de `train` entre 5 clientes de Federated Learning
-- [x] Ciclo de Federated Learning (FedAvg propio) con checkpoints; probado con un modelo
+- [x] Ciclo de Federated Learning (FedAvg propio) con checkpoints; compila una sola vez (ronda ≈ 22 s con EfficientNet-B0)
+- [x] Cuadrícula de tasas de aprendizaje para los 5 modelos (entrenamiento **centralizado**, 20 épocas)
+- [ ] **MobileNetV3-L no aprende** con ninguna tasa: diagnóstico pendiente
 - [ ] Confirmar la partición con el profesor
-- [ ] Entrenamiento formal de los 5 modelos con Federated Learning
-- [ ] Hyperparameter tuning, validación cruzada, ensembles, GAN
+- [ ] **Entrenamiento formal de los 5 modelos con Federated Learning** (no se ha hecho)
+- [ ] Hyperparameter tuning completo, validación cruzada, ensembles, GAN
 - [ ] Medición final en `test` (una sola vez)
 - [ ] Back-end, front-end, pruebas, deployment, monitoreo
 
-**Meta de trabajo:** F1 macro y exactitud de 95 %, medidas en `test`. **Todavía no se ha alcanzado ni hay evidencia de que sea alcanzable con estos recortes** (ver "Resultados de diagnóstico").
+**Meta de trabajo:** F1 macro y exactitud de 95 %, medidas en `test`. **Todavía no se ha alcanzado y con lo medido hasta ahora no hay evidencia de que sea alcanzable con estos recortes** (ver "Resultados de diagnóstico").
 
 ## Descarga del dataset
 
@@ -80,7 +82,7 @@ Proyecto_IA(Cacao-Beans)/             (en Ubuntu: ~/cacao/)
         └── errors_val.png
 ```
 
-Fuera del repo (no se versiona): `~/cacao_runs/` guarda los checkpoints y el historial de cada entrenamiento, y `~/.cache/kagglehub/` guarda los pesos preentrenados descargados.
+Fuera del repo (no se versiona): `~/cacao_runs/` guarda los checkpoints y el historial de cada entrenamiento, `~/tune/` guarda los logs de la cuadrícula de tasas y `~/.cache/kagglehub/` guarda los pesos preentrenados descargados.
 
 Cada CSV de `data/splits/` trae las columnas `origen`, `filename`, `path`, `label` y `md5`. La columna `path` es **relativa a la raíz del repo** (por ejemplo `data/processed/recortes_script/train/mala (1).jpg`), así que funciona igual en Windows y en Ubuntu si los scripts se ejecutan desde la raíz.
 
@@ -139,6 +141,8 @@ Limitación: con solo 73 granos `mala` en `test` (y 45 en `val`), un error mueve
 
 **Nota sobre el relleno.** Para volver cuadrado un recorte hay que añadir franjas. Con relleno blanco se veía un borde marcado contra el papel. Se midió el color del borde de 200 recortes de `train`: media (165, 165, 167), mínimo 121 y máximo 185 por canal, es decir un gris medio y no blanco. Además, la proporción ancho/alto difiere un poco entre clases (media 1,55 en `mala` y 1,62 en `sana`) y un clasificador que usa solo esa proporción logra F1 macro de 0,607 en `val` (0,543 en validación cruzada). Como el relleno depende de la proporción, podría actuar como atajo. Por eso se prolonga el borde de cada recorte, suavizado a 16 valores. No está medido contra el relleno blanco: es una comparación pendiente, con `val`.
 
+**El pipeline no es el cuello de botella:** recorrer las 1105 imágenes de `train` tarda ≈ 1,2 s por época (con caché en memoria bajaría a 0,1 s), frente a 4 a 9 s que tarda una época de entrenamiento.
+
 ![Muestra del pipeline](ml/results/pipeline_sample.png)
 
 ## Entorno de entrenamiento: WSL2 + TensorFlow con GPU
@@ -158,7 +162,7 @@ Equipo de desarrollo: Windows 10 22H2, GPU NVIDIA RTX 3060 Ti (8 GB), driver 596
 | pandas / pillow / scikit-learn / matplotlib | 3.0.6 / 13.0.0 / 1.9.1 / 3.11.2 |
 | Entorno virtual | `~/entornos/tf` |
 
-Python 3.12 figura en las versiones soportadas por TensorFlow según la documentación oficial. Python 3.14 no aparece, y por eso no se usa para entrenar.
+Python 3.12 figura en las versiones soportadas por TensorFlow según la documentación oficial (la documentación es inconsistente: una tabla lista 3.10 a 3.13 y otra sección 3.9 a 3.12). Python 3.14 no aparece, y por eso no se usa para entrenar.
 
 ### Paso a paso
 
@@ -207,13 +211,15 @@ export LD_LIBRARY_PATH="$_NV_LIBS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 EOF
 ```
 
+Por eso **siempre hay que activar el entorno** (`source ~/entornos/tf/bin/activate`), también en shells no interactivas: sin ese paso TensorFlow no ve la GPU.
+
 **6. Instalar las librerías de datos y de modelos** (en el mismo entorno):
 
 ```bash
 pip install pandas pillow scikit-learn matplotlib keras-hub
 ```
 
-`keras-hub` no cambia `tensorflow`, `keras` ni `numpy` (se comprobó con `pip install --dry-run` antes). Al instalarlo, la GPU siguió visible.
+`keras-hub` no cambia `tensorflow`, `keras` ni `numpy` (se comprobó con `pip install --dry-run` antes). Al instalarlo, la GPU siguió visible. No instalar ni actualizar paquetes sin comprobar antes con `--dry-run`: un cambio de `numpy`/`keras`/`tensorflow` puede romper la GPU.
 
 **7. Verificar** (en una terminal nueva, con el entorno activado):
 
@@ -244,10 +250,13 @@ git config --global user.email "su-correo-de-github"
 ### Entrenamientos largos en WSL2
 
 - **Al cerrar la última ventana de Ubuntu, WSL2 apaga la distribución y mata los procesos**, incluido `tmux` (se probó: el proceso murió a los ~78 s).
-- Lo que funcionó: dejar abierta (puede estar minimizada) una ventana de CMD con `wsl -d Ubuntu-24.04 -- sleep infinity`. Con ella, `tmux` sobrevivió al cierre de la ventana de Ubuntu. Se probó una sola vez y en una prueba corta.
-- `tmux` abre una shell nueva que no hereda el entorno: dentro hay que volver a ejecutar `source ~/entornos/tf/bin/activate`.
-- En la práctica se entrenó en primer plano, con `2>&1 | tee archivo.log`. El script guarda un checkpoint por ronda en `~/cacao_runs/` y, si se corta, el mismo comando reanuda desde la última ronda.
+- Forma de trabajo: **dos ventanas de CMD**.
+  - **CMD A (keep-alive):** `wsl -d Ubuntu-24.04 -- sleep infinity`. Se deja abierta (puede estar minimizada) mientras se trabaja. Con ella, `tmux` sobrevivió al cierre de la ventana de Ubuntu (se probó una sola vez y en una prueba corta).
+  - **CMD B (principal):** donde se ejecutan los comandos del proyecto.
+- `tmux` abre una shell nueva que no hereda el entorno (hay que volver a activarlo) y no resultó cómodo; en la práctica se entrena en primer plano con `python -u ... 2>&1 | tee archivo.log`. `nohup ... &` también funcionó, pero su log sale con búfer: usar `python -u`.
+- El script de entrenamiento guarda un checkpoint por ronda en `~/cacao_runs/` y, si se corta, el mismo comando **reanuda** desde la última ronda (ojo: una corrida nueva con el mismo `--tag` reanuda la anterior).
 - Antes de un entrenamiento largo, configurar Windows para no suspenderse mientras está enchufado.
+- Una vez la sesión de Ubuntu se cerró sola durante una descarga de pesos (no se supo por qué); las descargas se reanudan solas.
 
 ## Modelos y Federated Learning
 
@@ -275,13 +284,15 @@ Criterios: diseños distintos entre sí (para los ensembles del Topic 5) y tama�
 | Swin-Tiny | 7,3 | 55,3 |
 | DeiT-Small | 3,7 | 48,9 |
 
-El tiempo de MobileNet en GPU (41,6) es anómalo (más lento que en CPU y no cambió con más calentamiento): no se sabe la causa, y esa medición no es fiable. La medición definitiva de D-18 se hace con el modelo ya entrenado y de preferencia en una CPU parecida a la de AWS.
+El tiempo de MobileNet en GPU (41,6) es anómalo (más lento que en CPU y no cambió con más calentamiento): no se sabe la causa. La medición definitiva de D-18 se hace con el modelo ya entrenado y de preferencia en una CPU parecida a la de AWS.
 
-### Federated Learning (decisión mía, a confirmar con el equipo)
+### Federated Learning (decisión de Julián, a confirmar con el equipo)
 
 - **5 clientes simulados** con reparto estratificado de `train` (`09_federated_clients.py`): cada uno recibe 221 granos (170 `sana` y 51 `mala`), sin repetir ninguno (verificado). Con 10 clientes cada uno tendría ~25 `mala`, demasiado pocos.
 - **FedAvg propio** en Keras (`10_train_federated.py`): en cada ronda cada cliente entrena localmente desde los pesos globales y el servidor promedia los pesos ponderando por tamaño. No se comprobó si TensorFlow Federated funciona con TensorFlow 2.21 y Python 3.12; el profesor solo exige usar Federated Learning, no una librería concreta.
-- `val` y `test` son globales: los clientes no los ven. Cada ronda se mide el F1 macro en `val`, se guarda la mejor ronda y un checkpoint para reanudar.
+- `val` y `test` son globales: los clientes no los ven. Cada ronda se mide el F1 macro en `val`, se guarda la mejor ronda y un checkpoint para reanudar. El script **no usa `test`**.
+- Pérdida con peso por clase (≈ [sana, mala] = [0,65, 2,17]) por el desbalance.
+- El modelo se **compila una sola vez** y en cada cliente se reinicia el estado del optimizador (sin tocar la tasa de aprendizaje). Antes se recompilaba por cliente y cada ronda tardaba ≈ 90 s; ahora ≈ 22 s con EfficientNet-B0.
 - El reparto estratificado es el caso fácil (todos los clientes tienen datos parecidos).
 
 ## Lecciones del entrenamiento
@@ -290,14 +301,18 @@ Errores y hallazgos de la etapa de diagnóstico, para no repetirlos:
 
 1. **`predict` y `fit` de los modelos de KerasHub aplican su propio preprocesador.** Si se preprocesan los datos a mano y además se pasan a `predict`/`fit`, el preprocesamiento se aplica dos veces. Se comprobó (diferencia de 0,34 en las probabilidades). Solución: cargar el modelo con `preprocessor=None` y aplicar el `image_converter` del preset una sola vez. Las primeras corridas (`smoke`, `t1`, `t2`, `t3`) se hicieron con este error y no sirven como evidencia.
 2. **El preprocesamiento correcto es el del preset.** En un sondeo lineal, el converter del preset dio F1 macro 0,668 en `val`; la normalización de ImageNet, 0,478 (azar); solo dividir entre 255, 0,631.
-3. **Con una tasa de aprendizaje de 1e-3 y 3e-4 el entrenamiento divergió** (pérdida de millones), y con 1e-4 fue inestable (saltos entre "todo `mala`" y "todo `sana`"). Con **tasa de 1e-5 a 3e-5, recorte de gradiente (`clipnorm` 1.0) y `BatchNorm` congeladas** el entrenamiento es estable. No se aisló cuál de las tres medidas pesa más.
-4. **Las `BatchNorm` congeladas** evitan que las estadísticas de entrenamiento e inferencia difieran (con pocos datos se actualizan despacio). En la prueba centralizada, el F1 de `train` pasó de ~0,5 a ~0,7 con la misma pérdida.
-5. **Hay sobreajuste:** en la prueba centralizada de 20 épocas, `train` llegó a F1 ~0,95 y `val` se quedó en ~0,70 sin tendencia. Más épocas solas no lo arreglan.
-6. Cada ronda de FedAvg tarda ~90 s con 5 clientes, y casi todo parece ser un costo fijo (probablemente recompilar el modelo para cada cliente, no verificado) que casi no depende de las épocas locales.
+3. **Tasa de aprendizaje:** 1e-3 y 3e-4 divergen (pérdida de millones) y 1e-4 es inestable con la red completa. Con **1e-5 a 3e-5, recorte de gradiente (`clipnorm` 1,0) y `BatchNorm` congeladas** el entrenamiento es estable. No se aisló cuál de las tres medidas pesa más (hipótesis, sin probar: Adam normaliza el paso, así que el `clipnorm` probablemente hace poco).
+4. **`BatchNorm` congeladas** evitan que las estadísticas de entrenamiento e inferencia difieran (con pocos datos se actualizan despacio). En EfficientNet, el F1 de `train` pasó de ~0,5 a ~0,7 con la misma pérdida. Swin y DeiT no tienen `BatchNorm` (usan LayerNorm): el contador sale 0, es normal.
+5. **Recompilar por cliente costaba ≈ 20 s por cliente.** Medido: `fit` de 221 imágenes tardaba 25 s tras volver a compilar y 3 s compilando una sola vez.
+6. **Error al reiniciar el optimizador:** poner a cero todas las variables del optimizador **también ponía a cero la tasa de aprendizaje** (en Keras 3 es una variable), y el modelo dejaba de aprender (3 rondas idénticas). Se corrigió con una función que salta `learning_rate` y comprueba con un `assert` que la tasa se conserva.
+7. **Hay sobreajuste:** en la prueba centralizada, `train` llega a F1 ~0,95 y `val` se queda en ~0,70 sin tendencia. En Swin y DeiT es más fuerte (`train` 0,99 a 1,00). Más épocas solas no lo arreglan.
+8. Los parches a un script deben comprobarse (`grep -c`) antes de lanzar corridas largas, y los filtros de salida deben incluir los errores en minúscula (`grep -iE`): un parche sin aplicar produjo 15 logs vacíos sin que se viera el error.
 
 ## Resultados de diagnóstico (no son el entrenamiento formal)
 
-Todas son con **EfficientNet-B0**, medidas en `val` (195 recortes, 45 `mala`), sin usar `test`. Con tan pocas `mala`, las diferencias pequeñas son ruido.
+Todo se mide en `val` (195 recortes, 45 `mala`), sin usar `test`. Con tan pocas `mala`, las diferencias pequeñas son ruido.
+
+**Pruebas con EfficientNet-B0:**
 
 | Prueba | F1 macro | Comentario |
 |---|---|---|
@@ -305,22 +320,36 @@ Todas son con **EfficientNet-B0**, medidas en `val` (195 recortes, 45 `mala`), s
 | Solo proporción ancho/alto (CV 5 particiones sobre train+val) | 0,543 ± 0,020 | |
 | Regresión logística sobre características congeladas (CV) | 0,669 ± 0,024 | las características aportan señal sobre la proporción |
 | Entrenamiento centralizado estable (20 épocas) | 0,60 a 0,73 | `train` ~0,95: sobreajuste |
-| **Federated Learning, 10 rondas x 2 épocas locales, lr 3e-5, clipnorm 1, BatchNorm congeladas** | **0,677 (ronda 10)** | exactitud 0,774, recall `mala` 0,49; estable de la ronda 5 a la 10 |
+| **Federated Learning**, 10 rondas x 2 épocas locales, lr 3e-5, clipnorm 1, BatchNorm congeladas | **0,677** (ronda 10) | exactitud 0,774, recall `mala` 0,49; estable de la ronda 5 a la 10 |
+| Ajuste fino en dos fases (cabeza sola y luego red completa) | máx 0,727, final 0,642 | `train` sube a 0,85, `val` no |
+
+**Cuadrícula de tasas de aprendizaje** (entrenamiento **centralizado**, 20 épocas, `--freeze-bn --clipnorm 1.0`). Promedio del F1 macro en `val` de las últimas 5 épocas:
+
+| Modelo | lr 1e-5 | lr 3e-5 | lr 1e-4 | Tasa elegida |
+|---|---|---|---|---|
+| EfficientNet-B0 | **0,695** | 0,687 | 0,349 (diverge) | 1e-5 |
+| ResNet-50 | 0,677 | **0,729** | 0,693 | 3e-5 |
+| Swin-Tiny | **0,719** | 0,726 | 0,693 | 1e-5 |
+| DeiT-Small | **0,697** | 0,679 | 0,679 | 1e-5 |
+| MobileNetV3-L | 0,462 | 0,477 | 0,456 | no aprende |
+
+Criterio de elección (propio, no medido): una diferencia menor a ~0,03 cuenta como empate y gana la tasa más baja; solo ResNet-50 tiene una ganadora clara. Los logs están en `~/tune/` (fuera del repo).
 
 Lectura honesta:
 
 - **El 95 % no se acerca con este enfoque** y no hay evidencia de que sea alcanzable con estos recortes. No se debe presentar de otra forma.
-- El Federated Learning rinde a un nivel parecido al centralizado, así que FedAvg no parece ser el cuello de botella (resultado de una sola arquitectura y un reparto).
+- Los 4 modelos que aprenden quedan en el mismo nivel (F1 macro ≈ 0,68 a 0,73); con 45 `mala` en `val` **no se puede decir cuál es mejor**.
+- El Federated Learning rinde a un nivel parecido al centralizado con EfficientNet (0,68 contra ~0,70), así que FedAvg no parece ser el cuello de botella. Es un solo modelo y un solo reparto: **no está verificado** que las tasas de la cuadrícula (centralizada) sirvan igual en federado para los otros modelos.
 - Una exactitud de 0,77 equivale a la de predecir siempre `sana`: la métrica que importa es el F1 macro y el recall de `mala`.
-- Posibles causas, **sin comprobar**: la etiqueta se asignó por morfología y fermentación (D-17 del documento ya reconoce que el modelo mira solo el exterior); en una cuadrícula de errores (`ml/results/errors_val.png`) varias `mala` mal clasificadas se parecen a `sana` a simple vista, y algunas `sana` tienen manchas blancas parecidas a las de `mala`. Entre `mala` bien clasificadas se ve más negro, puntos blancos y moho.
-- Falta probar ajuste fino en dos fases (cabeza sola con la red congelada y luego descongelar con tasa menor): hay una opción `--head-epochs` en `11_central_check.py`, sin resultado todavía.
+- Posibles causas, **sin comprobar**: la etiqueta se asignó por morfología y fermentación (D-17 del documento ya reconoce que el modelo mira solo el exterior); en una cuadrícula de errores (`ml/results/errors_val.png`) varias `mala` mal clasificadas se parecen a `sana` a simple vista y algunas `sana` tienen manchas blancas parecidas a las de `mala`; entre las `mala` bien clasificadas se ve más negro, puntos blancos y moho.
+- **MobileNetV3-L no aprende** con ninguna tasa (pérdida clavada en 0,6931 = ln 2, F1 ≈ 0,45 a 0,50). Solo se congeló 1 capa `BatchNorm` (EfficientNet: 49, ResNet-50: 53) y su tiempo en GPU ya era anómalo. Causa desconocida; pendiente de diagnóstico.
 
 ## Cómo reproducir
 
 1. Descargar y extraer el dataset en `data/raw/` (ver "Descarga del dataset").
 2. Copiar `recortes_script/` a `data/processed/recortes_script/`.
 3. Crear el entorno con TensorFlow (ver "Entorno de entrenamiento"). Los scripts 00 a 06 también funcionan en Windows con `pip install pandas pillow scikit-learn matplotlib`.
-4. Desde la raíz del proyecto, ejecutar en orden:
+4. Desde la raíz del proyecto (`~/cacao`), ejecutar en orden:
 
 ```
 python ml/src/00_inventory.py        # inventario del dataset original -> ml/results/inventory.csv
@@ -334,16 +363,20 @@ python ml/src/08_check_models.py     # carga y tiempo de los 5 presets (descarga
 python ml/src/09_federated_clients.py  # reparto de train entre 5 clientes -> data/splits/federated/
 ```
 
-Entrenamiento federado de un modelo (la configuración estable encontrada hasta ahora):
+Entrenamiento federado de un modelo (la configuración estable encontrada con EfficientNet-B0; las tasas por modelo salen de la cuadrícula):
 
 ```
 python -u ml/src/10_train_federated.py --model EfficientNet-B0 --rounds 10 --local-epochs 2 \
-    --lr 3e-5 --clipnorm 1.0 --freeze-bn --tag f1
+    --lr 1e-5 --clipnorm 1.0 --freeze-bn --tag f1 2>&1 | tee ~/f1.log
 ```
 
 Modelos válidos para `--model`: `MobileNetV3-L`, `EfficientNet-B0`, `ResNet-50`, `Swin-Tiny`, `DeiT-Small`. Los resultados y checkpoints quedan en `~/cacao_runs/<tag>_<modelo>/`.
 
-Scripts de diagnóstico (no son parte del entrenamiento final): `11_central_check.py` (entrenamiento centralizado con métricas en `train` y `val`), `12_feature_probe.py` y `13_probe_cv.py` (sondeo lineal sobre características congeladas) y `14_errors_view.py` (cuadrícula de aciertos y errores).
+Scripts de diagnóstico (no son parte del entrenamiento final):
+
+- `11_central_check.py`: entrenamiento centralizado con métricas en `train` y `val` por época. Opciones: `--model --epochs --lr --freeze-bn --clipnorm --head-epochs` (esta última hace el ajuste fino en dos fases).
+- `12_feature_probe.py` y `13_probe_cv.py`: sondeo lineal sobre características congeladas.
+- `14_errors_view.py`: cuadrícula de aciertos y errores.
 
 Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cropped_allclasses`; solo corren con `data/raw/` completo. El 03 se eliminó (era la partición sobre `cropped`).
 
@@ -353,7 +386,7 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 - `dataset_original_train_val/`: 1634 fotos de cámara (4624x3472 y 4624x2136) ya divididas en train (1300) y val (334).
 - `labels_croppedallclasses.json`: anotaciones de recorte (formato VGG Image Annotator); no se usa para clasificar.
 - Las carpetas `train/val` y `cropped` no comparten contenido idéntico. Hipótesis (no confirmada al 100 %): son las fotos originales y sus recortes de los mismos granos. En `val`, los nombres de las 73 malas se repiten con los de `train` (contenido distinto), por lo que el nombre no sirve como clave de emparejamiento.
-- La descripción de Kaggle habla de 3268 imágenes (1634 granos, entero y corte transversal). No se comprobó cómo se relaciona esa cifra con las carpetas descargadas; nosotros usamos una sola imagen por grano.
+- La descripción de Kaggle habla de 3268 imágenes (1634 granos, "entero y corte transversal"). El inventario da 3268 = 1634 (`cropped`) + 1634 (originales); **no se verificó** si existen imágenes de corte transversal. Nosotros usamos una sola imagen por grano.
 
 ## Decisiones acordadas
 
@@ -365,16 +398,18 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 6. Partición sobre recortes propios: 85/15 del train del equipo + val del equipo como test (pendiente de confirmar con el profesor).
 7. Entrenamiento en WSL2 (Ubuntu 24.04) con TensorFlow 2.21.0 y la GPU local.
 8. Pipeline de datos de línea base: 224x224 configurable, relleno por borde suavizado, augmentation solo en `train` y sin cambios de color.
-9. Modelos preentrenados (transfer learning) con las 5 arquitecturas de la tabla; 5 clientes de Federated Learning con reparto estratificado y FedAvg propio.
+9. Modelos preentrenados (transfer learning) con las 5 arquitecturas de la tabla (no confirmado con el profesor); 5 clientes de Federated Learning con reparto estratificado y FedAvg propio.
 10. Meta de trabajo: F1 macro y exactitud de 95 %, medidas en `test`. Aún no está registrada en el documento de requerimientos (P-02).
+11. La selección de tasa y de ronda se hace con `val`; `test` se mide una sola vez al final.
 
 ## Pendientes
 
-- Entrenar formalmente los 5 modelos con Federated Learning (rondas, épocas locales y tasa de aprendizaje por modelo) y comparar con `val`.
-- Hyperparameter tuning (Topic 2), validación cruzada (Topic 3), ensembles (Topic 5) y GAN para la clase minoritaria (solo `train`).
-- Probar el ajuste fino en dos fases (`--head-epochs`).
+- Diagnosticar y corregir MobileNetV3-L.
+- Entrenar formalmente los 5 modelos con Federated Learning (rondas, épocas locales y tasa por modelo) y comparar con `val`.
+- Hyperparameter tuning completo (Topic 2), validación cruzada (Topic 3), ensembles (Topic 5) y GAN para la clase minoritaria (solo `train`).
 - Comparar con `val` el relleno (blanco contra borde suavizado), el tamaño (224 contra 384) y el augmentation.
 - Medir `test` una sola vez al final, y el tiempo por grano en una CPU parecida a la t4g.medium (D-18).
-- Confirmar la partición ≈ 68/12/20 con el profesor.
+- Confirmar con el profesor la partición ≈ 68/12/20 y el uso de modelos preentrenados.
+- Registrar la meta en P-02 del documento de requerimientos y decidir (equipo y profesor) qué se reporta si no se alcanza el 95 %.
 - Pasar a Cristhian el preprocesamiento del pipeline y el `image_converter` de cada modelo: el servicio de IA de la app debe aplicar el mismo (RF-08).
 - Guardar los prompts usados con IA en `docs/prompts/`.

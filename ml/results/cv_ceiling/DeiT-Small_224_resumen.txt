@@ -1,0 +1,20 @@
+Nombre: DeiT-Small_224_resumen.txt
+Descripcion: validacion cruzada de 5 particiones sobre train+val (1300), DeiT-Small_224, lr 1e-05, 15 epocas. Generado por 16_cv_ceiling.py v1.0. NO usa test.
+Fecha: 2026-10-23 | tiempo total 11.8 min
+
+F1 macro medio por epoca (media +- desv de las 5 particiones):
+  1:0.577 2:0.607 3:0.681 4:0.649 5:0.667 6:0.688 7:0.646 8:0.677 9:0.659 10:0.667 11:0.692 12:0.673 13:0.656 14:0.672 15:0.649
+
+EPOCA FINAL (epoca 15):
+  f1_macro     OOF 0.652  IC95 [0.620, 0.682]  | por particion 0.649 +- 0.050
+  acc          OOF 0.779  IC95 [0.757, 0.802]  | por particion 0.779 +- 0.034
+  recall_mala  OOF 0.377  IC95 [0.320, 0.431]  | por particion 0.377 +- 0.117
+  recall_sana  OOF 0.900  IC95 [0.881, 0.918]  | por particion 0.900 +- 0.049
+  umbral que maximiza F1 (OPTIMISTA, elegido con los mismos datos): 0.09 -> F1 0.681 acc 0.756 rec.mala 0.587 rec.sana 0.807
+
+MEJOR EPOCA SEGUN LA MEDIA (algo optimista) (epoca 11):
+  f1_macro     OOF 0.693  IC95 [0.663, 0.723]  | por particion 0.692 +- 0.036
+  acc          OOF 0.783  IC95 [0.761, 0.807]  | por particion 0.783 +- 0.018
+  recall_mala  OOF 0.523  IC95 [0.465, 0.578]  | por particion 0.523 +- 0.093
+  recall_sana  OOF 0.861  IC95 [0.840, 0.884]  | por particion 0.861 +- 0.022
+  umbral que maximiza F1 (OPTIMISTA, elegido con los mismos datos): 0.51 -> F1 0.695 acc 0.785 rec.mala 0.520 rec.sana 0.865

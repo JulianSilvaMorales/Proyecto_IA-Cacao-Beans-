@@ -1,0 +1,12 @@
+{
+  "tag": "DeiT-Small_224",
+  "lr": 1e-05,
+  "epochs": 15,
+  "mejor_epoca": 11,
+  "final": {
+    "f1_macro": 0.6515,
+    "acc": 0.7792,
+    "recall_mala": 0.3767,
+    "recall_sana": 0.9
+  }
+}

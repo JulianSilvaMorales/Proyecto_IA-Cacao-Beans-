@@ -1,0 +1,12 @@
+{
+  "tag": "ResNet-50_224",
+  "lr": 3e-05,
+  "epochs": 15,
+  "mejor_epoca": 11,
+  "final": {
+    "f1_macro": 0.6919,
+    "acc": 0.7654,
+    "recall_mala": 0.6,
+    "recall_sana": 0.815
+  }
+}

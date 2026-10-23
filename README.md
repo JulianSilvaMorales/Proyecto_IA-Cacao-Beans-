@@ -22,7 +22,7 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 - [x] Reparto de `train` entre 5 clientes de Federated Learning
 - [x] Ciclo de Federated Learning (FedAvg propio) con checkpoints; compila una sola vez (ronda ≈ 22 s con EfficientNet-B0)
 - [x] Cuadrícula de tasas de aprendizaje para los 5 modelos (entrenamiento **centralizado**, 20 épocas)
-- [ ] **MobileNetV3-L no aprende** con ninguna tasa: diagnóstico pendiente
+- [x] MobileNetV3-L corregido (congelaba 1 de 46 BatchNorm e ignoraba el softmax); repetida su fila de la cuadrícula
 - [ ] Confirmar la partición con el profesor
 - [ ] **Entrenamiento formal de los 5 modelos con Federated Learning** (no se ha hecho)
 - [ ] Hyperparameter tuning completo, validación cruzada, ensembles, GAN
@@ -79,7 +79,8 @@ Proyecto_IA(Cacao-Beans)/             (en Ubuntu: ~/cacao/)
         ├── pipeline_sample.png
         ├── models_check.txt
         ├── federated_counts.csv
-        └── errors_val.png
+        ├── errors_val.png
+        └── diag_bn_softmax.txt
 ```
 
 Fuera del repo (no se versiona): `~/cacao_runs/` guarda los checkpoints y el historial de cada entrenamiento, `~/tune/` guarda los logs de la cuadrícula de tasas y `~/.cache/kagglehub/` guarda los pesos preentrenados descargados.
@@ -307,6 +308,11 @@ Errores y hallazgos de la etapa de diagnóstico, para no repetirlos:
 6. **Error al reiniciar el optimizador:** poner a cero todas las variables del optimizador **también ponía a cero la tasa de aprendizaje** (en Keras 3 es una variable), y el modelo dejaba de aprender (3 rondas idénticas). Se corrigió con una función que salta `learning_rate` y comprueba con un `assert` que la tasa se conserva.
 7. **Hay sobreajuste:** en la prueba centralizada, `train` llega a F1 ~0,95 y `val` se queda en ~0,70 sin tendencia. En Swin y DeiT es más fuerte (`train` 0,99 a 1,00). Más épocas solas no lo arreglan.
 8. Los parches a un script deben comprobarse (`grep -c`) antes de lanzar corridas largas, y los filtros de salida deben incluir los errores en minúscula (`grep -iE`): un parche sin aplicar produjo 15 logs vacíos sin que se viera el error.
+9. **MobileNetV3-L no aprendía por dos fallos de montaje, no del modelo** (`15_diag_bn_softmax.py`, resumen en `ml/results/diag_bn_softmax.txt`):
+   - La función que congelaba las `BatchNorm` solo bajaba por el atributo `.layers`, y los bloques de MobileNet en KerasHub no lo exponen: congelaba **1 de 46**. Ahora se recorren todas las subcapas (`_flatten_layers`).
+   - `MobileNetImageClassifier` **ignora `activation="softmax"`**: su salida no eran probabilidades y la pérdida no tenía sentido (por eso quedaba clavada en 0,6931). Los otros 4 modelos sí aplicaban el softmax (media de la salida 0,500 exacta).
+   - Corrección (10 v1.6 y 11 v1.5): los 5 modelos se cargan con `activation=None` y la pérdida usa `from_logits=True`. Para los otros 4 es matemáticamente lo mismo, así que sus filas de la cuadrícula siguen valiendo.
+   - La explosión de EfficientNet-B0 con lr 1e-4 no es este fallo: sus 49 `BatchNorm` sí estaban congeladas. Hipótesis (no aislada): una `BatchNorm` congelada ya no renormaliza las activaciones y Adam mueve todos los pesos a la vez.
 
 ## Resultados de diagnóstico (no son el entrenamiento formal)
 
@@ -331,18 +337,20 @@ Todo se mide en `val` (195 recortes, 45 `mala`), sin usar `test`. Con tan pocas 
 | ResNet-50 | 0,677 | **0,729** | 0,693 | 3e-5 |
 | Swin-Tiny | **0,719** | 0,726 | 0,693 | 1e-5 |
 | DeiT-Small | **0,697** | 0,679 | 0,679 | 1e-5 |
-| MobileNetV3-L | 0,462 | 0,477 | 0,456 | no aprende |
+| MobileNetV3-L (corregido, 23-oct) | **0,726** | 0,704 | 0,671 | 1e-5 |
 
 Criterio de elección (propio, no medido): una diferencia menor a ~0,03 cuenta como empate y gana la tasa más baja; solo ResNet-50 tiene una ganadora clara. Los logs están en `~/tune/` (fuera del repo).
+
+La fila de MobileNetV3-L se repitió con `11_central_check.py` v1.5, después de corregir sus dos fallos de montaje (ver "Lecciones", punto 9); logs `~/tune/MobileNetV3-L_*_v2.log`. La fila antigua (0,462 / 0,477 / 0,456) no es válida. Las otras 4 filas no estaban afectadas.
 
 Lectura honesta:
 
 - **El 95 % no se acerca con este enfoque** y no hay evidencia de que sea alcanzable con estos recortes. No se debe presentar de otra forma.
-- Los 4 modelos que aprenden quedan en el mismo nivel (F1 macro ≈ 0,68 a 0,73); con 45 `mala` en `val` **no se puede decir cuál es mejor**.
+- Los 5 modelos quedan en el mismo nivel (F1 macro ≈ 0,68 a 0,73); con 45 `mala` en `val` **no se puede decir cuál es mejor**.
 - El Federated Learning rinde a un nivel parecido al centralizado con EfficientNet (0,68 contra ~0,70), así que FedAvg no parece ser el cuello de botella. Es un solo modelo y un solo reparto: **no está verificado** que las tasas de la cuadrícula (centralizada) sirvan igual en federado para los otros modelos.
 - Una exactitud de 0,77 equivale a la de predecir siempre `sana`: la métrica que importa es el F1 macro y el recall de `mala`.
 - Posibles causas, **sin comprobar**: la etiqueta se asignó por morfología y fermentación (D-17 del documento ya reconoce que el modelo mira solo el exterior); en una cuadrícula de errores (`ml/results/errors_val.png`) varias `mala` mal clasificadas se parecen a `sana` a simple vista y algunas `sana` tienen manchas blancas parecidas a las de `mala`; entre las `mala` bien clasificadas se ve más negro, puntos blancos y moho.
-- **MobileNetV3-L no aprende** con ninguna tasa (pérdida clavada en 0,6931 = ln 2, F1 ≈ 0,45 a 0,50). Solo se congeló 1 capa `BatchNorm` (EfficientNet: 49, ResNet-50: 53) y su tiempo en GPU ya era anómalo. Causa desconocida; pendiente de diagnóstico.
+- **MobileNetV3-L ya aprende** tras corregir sus dos fallos de montaje (punto 9 de "Lecciones"): 0,726 con lr 1e-5, al nivel de los demás. Su tiempo en GPU de `08_check_models.py` sigue sin explicar (no afecta al entrenamiento).
 
 ## Cómo reproducir
 
@@ -377,6 +385,7 @@ Scripts de diagnóstico (no son parte del entrenamiento final):
 - `11_central_check.py`: entrenamiento centralizado con métricas en `train` y `val` por época. Opciones: `--model --epochs --lr --freeze-bn --clipnorm --head-epochs` (esta última hace el ajuste fino en dos fases).
 - `12_feature_probe.py` y `13_probe_cv.py`: sondeo lineal sobre características congeladas.
 - `14_errors_view.py`: cuadrícula de aciertos y errores.
+- `15_diag_bn_softmax.py`: comprueba el montaje de los 5 modelos (BatchNorm congeladas y si la salida aplica softmax). Con `--entrenar` repite las corridas cortas que encontraron el fallo de MobileNet.
 
 Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cropped_allclasses`; solo corren con `data/raw/` completo. El 03 se eliminó (era la partición sobre `cropped`).
 
@@ -402,9 +411,25 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 10. Meta de trabajo: F1 macro y exactitud de 95 %, medidas en `test`. Aún no está registrada en el documento de requerimientos (P-02).
 11. La selección de tasa y de ronda se hace con `val`; `test` se mide una sola vez al final.
 
+## Notas para el equipo (pendientes fuera del módulo de IA)
+
+1. **Nombres de los conjuntos (documento de requerimientos, Cristhian).**
+   Lo que el documento llama "validación" (`recortes_script/val`, 334 granos) aquí es `test`:
+   se usa una sola vez, para la medición final (RNF-07) y la tabla comparativa de los 5 modelos (D-18).
+   La selección de modelo e hiperparámetros se hace con `val` (195 granos, 15 % del train del equipo).
+   Sugerencia: aclararlo en D-18 y RNF-07 para que nadie elija el modelo mirando los 334.
+2. **Corrección del porcentaje del lote (back-end, RF-10, Cristhian).**
+   Los errores del modelo no se cancelan: sesgan el % de granos sanos del lote.
+   Ejemplo con valores provisionales (acierta 81 % de sanas y 49 % de malas): un lote real
+   de 90 % sanos saldría como 78 % ("Fuera de norma" en vez de "Estándar").
+   Corrección: `p_real = (p_obs − (1 − recall_mala)) / (recall_sana − (1 − recall_mala))`,
+   limitada a [0, 1]. Los valores definitivos de `recall_sana` y `recall_mala` se entregan con
+   el modelo elegido, medidos en `test`.
+3. **Preprocesamiento en el servicio de IA (RF-08, Cristhian).** Se entrega con el modelo
+   elegido: mismo relleno del pipeline y mismo `image_converter` del preset.
+
 ## Pendientes
 
-- Diagnosticar y corregir MobileNetV3-L.
 - Entrenar formalmente los 5 modelos con Federated Learning (rondas, épocas locales y tasa por modelo) y comparar con `val`.
 - Hyperparameter tuning completo (Topic 2), validación cruzada (Topic 3), ensembles (Topic 5) y GAN para la clase minoritaria (solo `train`).
 - Comparar con `val` el relleno (blanco contra borde suavizado), el tamaño (224 contra 384) y el augmentation.
@@ -413,3 +438,4 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 - Registrar la meta en P-02 del documento de requerimientos y decidir (equipo y profesor) qué se reporta si no se alcanza el 95 %.
 - Pasar a Cristhian el preprocesamiento del pipeline y el `image_converter` de cada modelo: el servicio de IA de la app debe aplicar el mismo (RF-08).
 - Guardar los prompts usados con IA en `docs/prompts/`.
+- Entregar los modelos entrenados **por GitHub Releases, no dentro de Git** (Swin-Tiny pesa ~110 MB y GitHub rechaza archivos de más de 100 MB; además Git guarda cada versión para siempre). Junto al modelo elegido va un JSON con el preset, el preprocesamiento, las clases, el umbral, la versión y los recalls medidos en `test`.

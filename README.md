@@ -24,7 +24,7 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 - [x] Cuadrícula de tasas de aprendizaje para los 5 modelos (entrenamiento **centralizado**, 20 épocas)
 - [x] MobileNetV3-L corregido (congelaba 1 de 46 BatchNorm e ignoraba el softmax); repetida su fila de la cuadrícula
 - [x] Validación cruzada de 5 particiones de los 5 modelos: techo medido (F1 macro ≈ 0,69, IC 95 % ≈ 0,66–0,72); 384 px y sobremuestreo de `mala` no mejoran
-- [ ] Hyperparameter tuning con Hyperband (`17_hyperband.py`, escrito, sin ejecutar)
+- [x] Hyperparameter tuning con Hyperband de los 5 modelos (30 pruebas cada uno): sin ganador claro; mejores épocas entre 3 y 12
 - [ ] Confirmar la partición con el profesor
 - [ ] **Entrenamiento formal de los 5 modelos con Federated Learning** (no se ha hecho)
 - [ ] Ensembles y GAN
@@ -318,6 +318,11 @@ Errores y hallazgos de la etapa de diagnóstico, para no repetirlos:
    - `MobileNetImageClassifier` **ignora `activation="softmax"`**: su salida no eran probabilidades y la pérdida no tenía sentido (por eso quedaba clavada en 0,6931). Los otros 4 modelos sí aplicaban el softmax (media de la salida 0,500 exacta).
    - Corrección (10 v1.6 y 11 v1.5): los 5 modelos se cargan con `activation=None` y la pérdida usa `from_logits=True`. Para los otros 4 es matemáticamente lo mismo, así que sus filas de la cuadrícula siguen valiendo.
    - La explosión de EfficientNet-B0 con lr 1e-4 no es este fallo: sus 49 `BatchNorm` sí estaban congeladas. Hipótesis (no aislada): una `BatchNorm` congelada ya no renormaliza las activaciones y Adam mueve todos los pesos a la vez.
+10. **Hyperband y la memoria de la GPU** (`17_hyperband.py` v1.1 a v1.4):
+   - keras-tuner 1.4.8 importa `tensorboard` en cada prueba aunque no se use el callback de TensorBoard, y no está instalado: las pruebas fallaban en el primer minuto. Se omite ese paso en el script (sin instalar nada).
+   - **keras-tuner retiene cada modelo entrenado:** la memoria de GPU subía ~310 MiB por prueba con ResNet-50 (medido) y a las 14 pruebas se quedó sin memoria (OOM). `clear_session()` + `gc.collect()` **no** lo resolvió (medido). Solución: el proceso sale con código 3 cada N pruebas y se relanza; el sistema libera la GPU y keras-tuner reanuda donde quedó (verificado: la memoria vuelve a 0 en cada tanda y las pruebas siguen numeradas sin saltos).
+   - keras-tuner **no se puede reanudar tras 3 pruebas fallidas seguidas** (revisa todo el historial): después de un OOM hay que repetir ese modelo desde cero.
+   - **Swin-Tiny sin XLA no cabe en 8 GB con lote 32** (OOM en la primera época de cada prueba). Con `jit_compile="auto"` (XLA), como en la validación cruzada, sí cabe; cuesta ~270 s de compilación por prueba (Swin tardó ~2,7 h).
 
 ## Resultados de diagnóstico (no son el entrenamiento formal)
 
@@ -384,6 +389,25 @@ Lectura (medido):
 - El modelo es inestable entre épocas: en una misma partición el recall de `mala` puede saltar de 0,4 a 0,9. Hay muchos granos en la frontera entre clases.
 - **La meta de 95 % no es alcanzable con estos recortes**: el intervalo medido está más de 20 puntos por debajo y ninguna palanca técnica probada (arquitectura, resolución, balanceo, umbral) movió el techo. Explicación más probable, **sin comprobar**: el exterior del grano no basta para reproducir una etiqueta asignada también por fermentación (coherente con D-17).
 
+## Hyperparameter tuning con Hyperband (Topic 2)
+
+`17_hyperband.py` (keras-tuner 1.4.8) busca por modelo la **tasa de aprendizaje** (continua, de 5e-6 a 1e-4 en escala logarítmica), el **weight decay** de AdamW (0, 1e-4 o 1e-2) y el **número de épocas** (Hyperband las reparte; máximo 20, factor 3, 30 pruebas por modelo). Entrenamiento centralizado sobre `train`, objetivo F1 macro en `val`; **no usa `test`**. Fijo lo ya decidido con evidencia: todas las `BatchNorm` congeladas, clipnorm 1,0, logits, 224 px y pesos de clase. Resúmenes en `ml/results/hyperband/`.
+
+| Modelo | Mejor F1 en `val` | lr | Weight decay | Mejor época | F1 en la validación cruzada (referencia) |
+|---|---|---|---|---|---|
+| MobileNetV3-L | 0,776 | 9e-5 | 0 | 3 | 0,692 |
+| Swin-Tiny | 0,772 | 6e-6 | 0 | 12 | 0,689 |
+| DeiT-Small | 0,768 | 9e-5 | 0 | 4 | 0,652 |
+| ResNet-50 | 0,753 | 9e-5 | 0 | 9 | 0,692 |
+| EfficientNet-B0 | 0,736 | 4,6e-5 | 1e-2 | 4 | 0,692 |
+
+Lectura:
+
+- **No hay un ganador claro.** Las 5 mejores pruebas de cada modelo quedan a menos de 0,03 entre sí y los 5 modelos a menos de 0,04: con 45 `mala` en `val` es ruido.
+- **Las cifras de Hyperband son optimistas:** cada una es el máximo de 30 intentos medidos sobre el mismo `val`, por eso superan a la validación cruzada (≈ 0,69), que sigue siendo la estimación honesta del techo.
+- **Lo que aporta (medido):** el weight decay no ayuda (gana 0 en 4 de 5 modelos) y **las mejores épocas son pocas, de 3 a 12**. Las tasas elegidas son algo más altas que las de la cuadrícula en 4 modelos (9e-5 frente a 1e-5–3e-5), dentro del ruido.
+- Swin-Tiny se ajustó con XLA (`--jit`) y una prueba por proceso; los otros 4 sin XLA y 5 pruebas por proceso (ver "Lecciones", punto 10).
+
 ## Cómo reproducir
 
 1. Descargar y extraer el dataset en `data/raw/` (ver "Descarga del dataset").
@@ -419,7 +443,7 @@ Scripts de diagnóstico (no son parte del entrenamiento final):
 - `14_errors_view.py`: cuadrícula de aciertos y errores.
 - `15_diag_bn_softmax.py`: comprueba el montaje de los 5 modelos (BatchNorm congeladas y si la salida aplica softmax). Con `--entrenar` repite las corridas cortas que encontraron el fallo de MobileNet.
 - `16_cv_ceiling.py`: validación cruzada de 5 particiones sobre `train` + `val` con intervalos por bootstrap. Opciones `--model --lr --epochs --img-size --oversample`. No usa `test`.
-- `17_hyperband.py`: Hyperband (keras-tuner) por modelo sobre la tasa, el weight decay de AdamW y las épocas, con objetivo F1 macro en `val`. Opciones `--model --max-epochs --factor`. Estado en `~/cacao_runs/hyperband/` (reanuda si se corta). No usa `test`.
+- `17_hyperband.py`: Hyperband (keras-tuner) por modelo sobre la tasa, el weight decay de AdamW y las épocas, con objetivo F1 macro en `val`. Opciones `--model --max-epochs --factor --trials-per-process --jit`. Sale con código 3 cada `--trials-per-process` pruebas (5 por defecto) para liberar la GPU; hay que relanzarlo hasta que salga con 0: `until python -u ml/src/17_hyperband.py --model ResNet-50; [ $? -ne 3 ]; do :; done`. Swin-Tiny necesita `--trials-per-process 1 --jit`. Estado en `~/cacao_runs/hyperband/`. No usa `test`.
 
 Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cropped_allclasses`; solo corren con `data/raw/` completo. El 03 se eliminó (era la partición sobre `cropped`).
 
@@ -465,8 +489,7 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 
 ## Pendientes
 
-- Ejecutar Hyperband para los 5 modelos (`17_hyperband.py`) y fijar la tasa, el weight decay y las épocas de cada uno.
-- Entrenar formalmente los 5 modelos con Federated Learning con esos hiperparámetros y comparar con `val`.
+- Entrenar formalmente los 5 modelos con Federated Learning con los hiperparámetros de Hyperband (pocas épocas: las mejores salen entre la 3 y la 12) y comparar con `val`.
 - Ensembles (Topic 5) y GAN para la clase minoritaria (solo `train`). Ojo: el sobremuestreo de `mala` ya empeoró en la validación cruzada.
 - Comparar con `val` el relleno (blanco contra borde suavizado) y el augmentation. (224 contra 384 ya está medido: 384 no mejora.)
 - Medir `test` una sola vez al final, y el tiempo por grano en una CPU parecida a la t4g.medium (D-18).

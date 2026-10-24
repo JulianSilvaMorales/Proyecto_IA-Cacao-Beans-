@@ -1,0 +1,13 @@
+Nombre: EfficientNet-B0_resumen.txt
+Descripcion: Hyperband (keras-tuner) para EfficientNet-B0, centralizado, objetivo F1 macro en val (195). Generado por 17_hyperband.py v1.1. NO usa test.
+Fecha: 2026-10-24 | 30 pruebas | 50 min (si se reanudo, solo cuenta la ultima ejecucion)
+
+Mejores 5 pruebas:
+trial       lr  weight_decay  epocas_asignadas  mejor_epoca  val_f1_macro
+ 0024 0.000046        0.0100                20            4      0.735973
+ 0016 0.000013        0.0001                20            1      0.721429
+ 0029 0.000045        0.0000                20            9      0.721177
+ 0017 0.000026        0.0000                20           11      0.719666
+ 0025 0.000006        0.0000                20            7      0.716652
+
+Ojo: val tiene 45 mala; diferencias de F1 menores a ~0,05 son ruido.

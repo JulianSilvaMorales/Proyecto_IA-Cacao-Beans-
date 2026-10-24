@@ -1,0 +1,13 @@
+Nombre: MobileNetV3-L_resumen.txt
+Descripcion: Hyperband (keras-tuner) para MobileNetV3-L, centralizado, objetivo F1 macro en val (195). Generado por 17_hyperband.py v1.1. NO usa test.
+Fecha: 2026-10-24 | 30 pruebas | 39 min (si se reanudo, solo cuenta la ultima ejecucion)
+
+Mejores 5 pruebas:
+trial       lr  weight_decay  epocas_asignadas  mejor_epoca  val_f1_macro
+ 0017 0.000090        0.0000                20            3      0.776239
+ 0024 0.000066        0.0001                20           11      0.770684
+ 0016 0.000017        0.0000                20           10      0.763095
+ 0026 0.000057        0.0000                20            9      0.754444
+ 0029 0.000045        0.0000                20           12      0.752930
+
+Ojo: val tiene 45 mala; diferencias de F1 menores a ~0,05 son ruido.

@@ -1,0 +1,13 @@
+Nombre: Swin-Tiny_resumen.txt
+Descripcion: Hyperband (keras-tuner) para Swin-Tiny, centralizado, objetivo F1 macro en val (195). Generado por 17_hyperband.py v1.4 con --jit (XLA). NO usa test.
+Fecha: 2026-10-24 | 30 pruebas | 0 min (si se reanudo, solo cuenta la ultima ejecucion)
+
+Mejores 5 pruebas:
+trial       lr  weight_decay  epocas_asignadas  mejor_epoca  val_f1_macro
+ 0024 0.000006        0.0000                20           12      0.772409
+ 0028 0.000008        0.0001                20           17      0.768889
+ 0021 0.000006        0.0000                 7            4      0.761322
+ 0023 0.000015        0.0100                 7            7      0.752930
+ 0027 0.000011        0.0001                20            7      0.752930
+
+Ojo: val tiene 45 mala; diferencias de F1 menores a ~0,05 son ruido.

@@ -1,0 +1,13 @@
+Nombre: ResNet-50_resumen.txt
+Descripcion: Hyperband (keras-tuner) para ResNet-50, centralizado, objetivo F1 macro en val (195). Generado por 17_hyperband.py v1.3. NO usa test.
+Fecha: 2026-10-24 | 30 pruebas | 0 min (si se reanudo, solo cuenta la ultima ejecucion)
+
+Mejores 5 pruebas:
+trial       lr  weight_decay  epocas_asignadas  mejor_epoca  val_f1_macro
+ 0016 0.000090          0.00                20            9      0.752905
+ 0025 0.000015          0.01                20           11      0.752098
+ 0014 0.000090          0.00                 7            4      0.747753
+ 0017 0.000017          0.00                20           11      0.733683
+ 0026 0.000057          0.00                20           19      0.733683
+
+Ojo: val tiene 45 mala; diferencias de F1 menores a ~0,05 son ruido.

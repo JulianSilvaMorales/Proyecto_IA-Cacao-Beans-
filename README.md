@@ -738,6 +738,59 @@ Diagnósticos (no forman parte del entrenamiento final): `11_central_check.py` (
 
 ## Notas para el equipo (pendientes fuera del módulo de IA)
 
+0. **Dónde están los modelos y cómo obtenerlos (Cristhian, servicio de IA).**
+   Están en la release **`modelos-v1.0`**: https://github.com/JulianSilvaMorales/Proyecto_IA-Cacao-Beans-/releases/tag/modelos-v1.0
+   El **modelo de la app es EfficientNet-B0**; para el servicio de IA se recomienda **`inspectia_EfficientNet-B0_v1.0_savedmodel.zip`**, que solo necesita TensorFlow. `inferencia.py` muestra cómo preparar la imagen y usarlo, y `inspectia_EfficientNet-B0_v1.0.json` trae su ficha (entrada, clases, umbral, métricas y recalls para la corrección del lote).
+
+   **a) Descargar desde la web:** abrir el enlace de la release y, en **Assets**, hacer clic en cada archivo: `inspectia_EfficientNet-B0_v1.0_savedmodel.zip`, `inspectia_EfficientNet-B0_v1.0.json`, `inferencia.py` y `manifest.json`.
+
+   **b) Descargar por línea de comandos** (útil en el `Dockerfile` del servicio de IA o en el despliegue de D-16). Cada archivo tiene una dirección fija de la forma `https://github.com/JulianSilvaMorales/Proyecto_IA-Cacao-Beans-/releases/download/modelos-v1.0/<archivo>`:
+
+   ```bash
+   BASE=https://github.com/JulianSilvaMorales/Proyecto_IA-Cacao-Beans-/releases/download/modelos-v1.0
+   mkdir -p modelo && cd modelo
+   for f in inspectia_EfficientNet-B0_v1.0_savedmodel.zip inspectia_EfficientNet-B0_v1.0.json inferencia.py manifest.json; do
+     curl -fsSL -o "$f" "$BASE/$f"
+   done
+   ```
+
+   En Windows (PowerShell) el equivalente para cada archivo es `Invoke-WebRequest -Uri "$BASE/<archivo>" -OutFile "<archivo>"`.
+
+   **c) Comprobar que se descargó bien** (el SHA-256 debe coincidir con el de `manifest.json` de la release):
+
+   ```bash
+   python -c "import hashlib,json; m=json.load(open('manifest.json'))['archivos']; [print(f, 'OK' if hashlib.sha256(open(f,'rb').read()).hexdigest()==m[f] else 'DISTINTO') for f in m if __import__('os').path.exists(f)]"
+   ```
+
+   **d) Descomprimir e instalar lo necesario:**
+
+   ```bash
+   python -m zipfile -e inspectia_EfficientNet-B0_v1.0_savedmodel.zip .    # crea la carpeta inspectia_EfficientNet-B0_v1.0_savedmodel/
+   pip install tensorflow==2.21.0                                           # para el SavedModel basta TensorFlow
+   # solo si se usa el .keras: pip install keras==3.15.1 keras-hub==0.32.0
+   ```
+
+   **e) Probarlo con un recorte** (generado con `generar_recortes.py`):
+
+   ```bash
+   python inferencia.py inspectia_EfficientNet-B0_v1.0_savedmodel recorte.jpg
+   # P(sana) = 0.053 | P(mala) = 0.947 -> mala
+   ```
+
+   **f) Usarlo dentro del servicio** (lo mismo que hace `inferencia.py`):
+
+   ```python
+   import tensorflow as tf
+   from inferencia import preparar                       # relleno y redimensionado iguales al entrenamiento
+
+   modelo = tf.saved_model.load("inspectia_EfficientNet-B0_v1.0_savedmodel")   # cargar UNA vez al iniciar el servicio
+   x = tf.stack([preparar(ruta) for ruta in rutas_de_recortes])               # (n, 224, 224, 3), valores 0-255
+   p_mala = modelo.serve(x).numpy()[:, 1]                                      # probabilidad de "mala" por grano
+   clases = ["mala" if p >= 0.5 else "sana" for p in p_mala]
+   ```
+
+   Importante: guardar el modelo cargado en una variable (como arriba) y no encadenar `tf.saved_model.load(...).serve(...)` en una sola línea, porque el modelo se libera antes de usarse (ver "Lecciones", punto 13). El porcentaje de granos sanos del lote se corrige como indica el punto 2.
+
 1. **Nombres de los conjuntos (documento de requerimientos, Cristhian).**
    Lo que el documento llama "validación" (`recortes_script/val`, 334 granos) aquí es `test`: se usa una sola vez, para la medición final (RNF-07) y la tabla comparativa de los 5 modelos (D-18). La selección de modelo e hiperparámetros se hace con `val` (195 granos, 15 % del train del equipo). Sugerencia: aclararlo en D-18 y RNF-07 para que nadie elija el modelo mirando los 334.
 2. **Corrección del porcentaje del lote (back-end, RF-10, Cristhian).**

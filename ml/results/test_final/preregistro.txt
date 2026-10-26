@@ -1,0 +1,59 @@
+Nombre: preregistro.txt
+Descripcion: Prerregistro de la medicion final en test. Fija, ANTES de usar test, que se mide, como se
+             reporta y que modelo usara la app (D-18), para que el resultado de test no influya en
+             ninguna decision. Se versiona y se sube a GitHub antes de ejecutar 21_test_final.py.
+Fecha_creacion: 2026-10-26
+Actualizacion: 2026-10-26
+Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
+Version: 1.0
+
+ESTADO AL ESCRIBIR ESTE ARCHIVO
+- test (data/splits/test.csv, 334 granos, 73 mala) NO se ha usado en ningun script: no existe
+  ml/results/test_final/test_usado.txt.
+- Modelos: ronda 15 (last.weights.h5) del entrenamiento federado formal, variante elegida por modelo
+  segun ml/results/federated_formal/modelos_elegidos.json (criterio: F1 macro medio en val, rondas 11-15).
+- Umbral de decision: 0,5 para todos (no se ajusta; la validacion cruzada mostro que ajustarlo apenas
+  cambia el F1).
+
+QUE SE MIDE EN TEST (una sola vez, 21_test_final.py)
+- 9 candidatos: los 5 modelos elegidos; ensemble heterogeneo con voto suave (PRINCIPAL) y con voto
+  duro; homogeneo de Swin-Tiny (2 variantes); hibrido de los 10 modelos.
+- Metrica principal: F1 macro (RNF-07). Ademas: exactitud, precision y recall por clase, matriz de
+  confusion e intervalos de confianza del 95 % por bootstrap (2000 remuestras).
+- Se reportan TODOS los candidatos, salgan bien o mal. No se reentrena ni se cambia nada despues.
+- La meta de trabajo (F1 macro y exactitud de 95 %) no se presentara como cumplida si no se alcanza.
+
+TIEMPO DE INFERENCIA (medido antes de test con imagenes de val: ml/results/test_final/tiempos_cpu_*.csv)
+  modelo                 s por lote de 100 granos (CPU de este equipo, 2 hilos ~ 2 vCPU de la t4g.medium)
+  EfficientNet-B0        1,90
+  ResNet-50              5,08
+  MobileNetV3-L          5,21
+  DeiT-Small             6,76
+  Swin-Tiny              8,94
+  Ensemble (5 modelos)  27,90
+  Es una ESTIMACION: la t4g.medium es ARM (Graviton2) y no se midio alli.
+
+REGLA PARA ELEGIR EL MODELO DE LA APP (D-18: el de mejor F1 entre los que cumplen el tiempo)
+1. Limite de tiempo: la clasificacion de un lote de 100 granos debe tardar 4 s o menos. Motivo:
+   RNF-01 fija 5 a 8 s para TODO el analisis (subida de fotos, separacion de granos con OpenCV,
+   clasificacion, guardado y respuesta), y la t4g.medium probablemente es algo mas lenta que esta CPU
+   con 2 hilos. Se usa la referencia de 100 granos de la recomendacion (NTC 1252:2021, seccion A.3).
+2. Orden de preferencia: F1 macro en val de la ronda 15 (la que se entrega), de mayor a menor:
+     Swin-Tiny 0,748 | ensemble heterogeneo 0,735 | DeiT-Small 0,720 | EfficientNet-B0 0,682 |
+     ResNet-50 0,668 | MobileNetV3-L 0,664
+3. Modelo de la app = el primero de ese orden que cumple el limite de tiempo.
+   Con la estimacion actual: EfficientNet-B0 (variante formal3, ronda 15), unico por debajo de 4 s.
+4. Si la medicion real en la t4g.medium da otros tiempos, se aplica la MISMA regla (mismo orden de
+   val y mismo limite) con los tiempos reales. El resultado de test NO se usa para elegir.
+5. La validacion cruzada (ml/results/cv_ceiling/) mostro que los 5 modelos tienen el mismo techo
+   (F1 macro ~0,69, intervalos solapados): elegir el mas rapido no sacrifica precision medible.
+
+COMPARACIONES QUE SE DESCARTAN (y no se haran despues de test)
+- Relleno blanco frente a borde suavizado y variantes de augmentation: no se hacen. Motivo: ninguna
+  palanca probada (5 arquitecturas, 384 px, sobremuestreo, GAN, Hyperband, umbral) movio el techo de la
+  validacion cruzada; es muy improbable que estas lo hagan, y despues de usar test ya no se podria
+  reentrenar sin invalidar la medicion.
+
+PENDIENTE QUE NO DEPENDE DE TEST
+- Confirmar la particion con el profesor. Si exigiera 70/15/15 exacto, cambia el conjunto test y todo
+  el entrenamiento se rehace de todos modos.

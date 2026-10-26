@@ -1,0 +1,7 @@
+modelo,hilos,ms_por_grano_cpu,seg_lote_100_granos
+MobileNetV3-L,12,23.4,2.34
+EfficientNet-B0,12,13.1,1.31
+ResNet-50,12,23.9,2.39
+Swin-Tiny,12,53.0,5.3
+DeiT-Small,12,41.2,4.12
+ensemble heterogeneo (suma de los 5),12,154.6,15.46

@@ -6,7 +6,7 @@ Descripcion: Documentacion del modulo de IA de InspectIA: datos, particion, pipe
 Fecha_creacion: 2026-10-09
 Actualizacion: 2026-10-26
 Autor: Julian Andres Silvas Morales
-Version: 4.0
+Version: 4.1
 -->
 
 # Clasificación de granos de cacao (Proyecto final IA): InspectIA
@@ -37,11 +37,13 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 12. [Hyperparameter tuning con Hyperband](#hyperparameter-tuning-con-hyperband-topic-2)
 13. [Experimento de GAN: por qué no se usa](#experimento-de-gan-para-la-clase-mala-topic-1-por-qué-no-se-usa)
 14. [Entrenamiento federado formal](#entrenamiento-federado-formal-topic-6)
-15. [Lecciones del entrenamiento](#lecciones-del-entrenamiento)
-16. [Cómo reproducir](#cómo-reproducir)
-17. [Decisiones acordadas](#decisiones-acordadas)
-18. [Notas para el equipo](#notas-para-el-equipo-pendientes-fuera-del-módulo-de-ia)
-19. [Pendientes](#pendientes)
+15. [Ensembles](#ensembles-topic-5)
+16. [Medición final en test](#medición-final-en-test)
+17. [Lecciones del entrenamiento](#lecciones-del-entrenamiento)
+18. [Cómo reproducir](#cómo-reproducir)
+19. [Decisiones acordadas](#decisiones-acordadas)
+20. [Notas para el equipo](#notas-para-el-equipo-pendientes-fuera-del-módulo-de-ia)
+21. [Pendientes](#pendientes)
 
 ## Estado actual y resultado principal
 
@@ -60,11 +62,13 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 | Hyperparameter tuning con Hyperband (Topic 2) | ✅ | 17 |
 | Experimento de GAN (Topic 1) | ✅ empeora: **no se usa** | 18 |
 | Entrenamiento federado formal de los 5 modelos (Topic 6) | ✅ | 10, 19 |
-| Ensembles (Topic 5) | ⏳ pendiente | — |
-| Medición final en `test` (una sola vez) | ⏳ pendiente | — |
+| Ensembles (Topic 5) | ✅ no superan al mejor modelo individual | 20 |
+| Prerregistro y medición final en `test` (una sola vez) | ✅ | 21 |
 | Exportar los modelos y publicarlos (GitHub Releases) | ⏳ pendiente | — |
 
-**Resultado principal (medido, sin tocar `test`):** con estos datos, el techo de los 5 modelos es un **F1 macro ≈ 0,69 (IC 95 % ≈ 0,66–0,72) y una exactitud ≈ 0,77** (validación cruzada de 5 particiones). Los modelos federados formales quedan en **0,66–0,72** en `val`. **La meta de trabajo de 95 % de F1 macro y exactitud no es alcanzable con estos recortes:** ninguna palanca probada (5 arquitecturas, resolución 384, sobremuestreo, GAN, Hyperband, umbral) movió el techo. Qué valor se registra en P-02 lo deciden el equipo y el profesor.
+**Resultado principal:** el **modelo de la app es EfficientNet-B0** (federado, ronda 15), elegido **antes** de mirar `test` con la regla de D-18 (el de mejor F1 en `val` entre los que clasifican un lote de 100 granos en 4 s o menos). En `test` (334 granos, usado una sola vez) logra **F1 macro 0,735 (IC 95 % 0,677–0,792) y exactitud 0,829 (0,787–0,868)**, con recall de `mala` 0,534 y de `sana` 0,912. Los 9 candidatos medidos (5 modelos y 4 ensembles) quedan entre 0,64 y 0,74 con intervalos solapados, en línea con el techo de la validación cruzada (F1 macro ≈ 0,69, IC 95 % ≈ 0,66–0,72). Ninguna palanca probada (5 arquitecturas, 384 px, sobremuestreo, GAN, Hyperband, umbral, ensembles) movió ese techo.
+
+Sobre la meta: el documento de requerimientos no fija un número; RNF-07 remite a P-02 ("el F1-score mínimo que se defina"). La meta inicial de trabajo de 95 % de F1 macro y exactitud (propia del módulo, no del documento) resultó inalcanzable con estos datos y se reemplaza por lo medido. Propuesta para P-02, hecha antes de usar `test` a partir de la validación cruzada: **F1 macro ≥ 0,65 en `test`**, que el modelo de la app cumple.
 
 ## Estructura de carpetas
 
@@ -111,7 +115,10 @@ Proyecto_IA(Cacao-Beans)/              (en Ubuntu: ~/cacao/)
         ├── cv_ceiling/                         16: validación cruzada (<modelo>_<tamaño>[_os]_folds.csv, _resumen.txt, _resumen.json)
         ├── hyperband/                          17: Hyperband (<modelo>_trials.csv, _resumen.txt)
         ├── gan/                                18: experimento de GAN (gan_resumen.txt, gan_folds.csv, muestras_particion<k>.png)
-        └── federated_formal/                   19: entrenamiento federado formal (historiales, fl_resumen.*, modelos_elegidos.json)
+        ├── federated_formal/                   19: entrenamiento federado formal (historiales, fl_resumen.*, modelos_elegidos.json)
+        ├── ensemble/                           20: ensembles en val (ensemble_val.csv, ensemble_val_resumen.txt)
+        └── test_final/                         21: preregistro.txt, tiempos_cpu_*.csv, test_resultados.csv, test_resumen.txt,
+                                                    test_metricas.json y test_usado.txt (marca de que test ya se usó)
 ```
 
 **Fuera del repo (no se versiona, en Ubuntu):**
@@ -122,6 +129,7 @@ Proyecto_IA(Cacao-Beans)/              (en Ubuntu: ~/cacao/)
 | `~/cacao_runs/cv/` | Probabilidades fuera de partición de la validación cruzada (`<config>_oof.npz`) |
 | `~/cacao_runs/hyperband/<modelo>/` | Estado de keras-tuner y pesos de cada prueba |
 | `~/cacao_runs/gan/` | Generadores de la GAN y probabilidades del experimento |
+| `~/cacao_runs/ensemble/`, `~/cacao_runs/test_final/` | Probabilidades de cada modelo en `val` y en `test` |
 | `~/cacao_runs/f1_*`, `v2_*` | Pruebas federadas de diagnóstico con EfficientNet-B0 |
 | `~/cacao_runs/smoke_*`, `t1_*`, `t2_*`, `t3_*` | Corridas con el error de doble preprocesamiento: **no son evidencia** (ver "Lecciones", punto 1) |
 | `~/tune/` | Logs de la cuadrícula de tasas |
@@ -132,7 +140,7 @@ Cada CSV de `data/splits/` trae las columnas `origen`, `filename`, `path`, `labe
 
 ## Scripts: qué hace cada uno y qué produce
 
-Todos en `ml/src/`, con header (nombre, descripción, fechas, autor, versión), semilla 42 y ejecutables desde la raíz del repo. **Ninguno de entrenamiento lee `test`.**
+Todos en `ml/src/`, con header (nombre, descripción, fechas, autor, versión), semilla 42 y ejecutables desde la raíz del repo. **Solo `21_test_final.py` lee `test`, y una sola vez.**
 
 | Script | Para qué sirve | Qué produce | Sección |
 |---|---|---|---|
@@ -155,6 +163,8 @@ Todos en `ml/src/`, con header (nombre, descripción, fechas, autor, versión), 
 | `17_hyperband.py` | **Hyperband** (keras-tuner) por modelo sobre tasa, weight decay y épocas | `ml/results/hyperband/` | Hyperband |
 | `18_gan_cv.py` | **Experimento de GAN** (DCGAN + DiffAugment por partición) comparado con la validación cruzada | `ml/results/gan/` | GAN |
 | `19_fl_summary.py` | Resume el entrenamiento federado formal y elige la variante de cada modelo | `ml/results/federated_formal/` | Entrenamiento formal |
+| `20_ensemble.py` | **Ensembles** heterogéneo, homogéneo e híbrido con los modelos federados, solo en `val` | `ml/results/ensemble/` | Ensembles |
+| `21_test_final.py` | **Medición final en `test`, de un solo uso** (se bloquea tras usarse); `--solo-tiempos --hilos N` mide el tiempo por grano en CPU sin leer `test` | `ml/results/test_final/` | Medición final |
 
 El script que generó los recortes (`generar_recortes.py`) no está en `ml/src/`: viene dentro de `recortes_script/` (ver "Recortes propios").
 
@@ -241,7 +251,7 @@ Limitación: con 73 granos `mala` en `test` y 45 en `val`, un error mueve el rec
 | Etiquetas | sana = 0, mala = 1 | |
 | Lote | 32 | 35 lotes en train, 7 en val, 11 en test |
 
-**Nota sobre el relleno.** Con relleno blanco se veía un borde marcado contra el papel: el borde de 200 recortes de `train` mide (165, 165, 167) de media, un gris medio. Además, la proporción ancho/alto difiere un poco entre clases (1,55 en `mala` y 1,62 en `sana`) y un clasificador que usa solo esa proporción logra F1 macro 0,543 en validación cruzada (`13_probe_cv.py`); como el relleno depende de la proporción, podría actuar como atajo. Por eso se prolonga el borde de cada recorte, suavizado a 16 valores. No está medido contra el relleno blanco (comparación pendiente).
+**Nota sobre el relleno.** Con relleno blanco se veía un borde marcado contra el papel: el borde de 200 recortes de `train` mide (165, 165, 167) de media, un gris medio. Además, la proporción ancho/alto difiere un poco entre clases (1,55 en `mala` y 1,62 en `sana`) y un clasificador que usa solo esa proporción logra F1 macro 0,543 en validación cruzada (`13_probe_cv.py`); como el relleno depende de la proporción, podría actuar como atajo. Por eso se prolonga el borde de cada recorte, suavizado a 16 valores. No se midió contra el relleno blanco: la comparación se descartó antes de usar `test` (ver "Prerregistro").
 
 **El pipeline no es el cuello de botella:** recorrer las 1105 imágenes de `train` tarda ≈ 1,2 s por época, frente a 4 a 9 s de una época de entrenamiento.
 
@@ -451,7 +461,7 @@ Lectura (medido):
 - **384 px no mejora** frente a 224. **Sobremuestrear `mala` empeora** frente a los pesos de clase y es más inestable. Ajustar el umbral apenas sube el F1 (≈ +0,01, y de forma optimista).
 - **El número de épocas importa y depende del modelo:** Swin alcanza su mejor nivel en la época 3 y DeiT pierde recall de `mala` al seguir entrenando. Por eso las épocas se fijaron con Hyperband.
 - El modelo es inestable entre épocas: en una misma partición el recall de `mala` puede saltar de 0,4 a 0,9. Hay muchos granos en la frontera entre clases.
-- **La meta de 95 % no es alcanzable con estos recortes**: el intervalo medido está más de 20 puntos por debajo. Explicación más probable, **sin comprobar**: el exterior del grano no basta para reproducir una etiqueta asignada también por fermentación (coherente con D-17).
+- **La meta inicial de trabajo de 95 % no es alcanzable con estos recortes**: el intervalo medido está más de 20 puntos por debajo. Explicación más probable, **sin comprobar**: el exterior del grano no basta para reproducir una etiqueta asignada también por fermentación (coherente con D-17).
 
 ## Hyperparameter tuning con Hyperband (Topic 2)
 
@@ -526,6 +536,69 @@ Lectura (medido):
 - **Por qué las tasas de Hyperband no servían tal cual (hipótesis coherente con los datos):** en este FedAvg cada cliente reinicia Adam en cada ronda y solo da 7 pasos; los primeros pasos de Adam son relativamente grandes, así que una tasa estable en centralizado (Adam "caliente" durante muchas épocas) resulta demasiado agresiva aquí.
 - **Se entrega la ronda 15** (`last.weights.h5`) de la variante elegida, no la de mejor F1 en `val`, por la misma razón: la mejor ronda es el pico del ruido y las rondas finales ya son estables. La lista exacta está en `ml/results/federated_formal/modelos_elegidos.json`.
 
+## Ensembles (Topic 5)
+
+**Por qué:** el profesor incluyó los ensembles (heterogéneo, homogéneo e híbrido). `20_ensemble.py` los arma con los modelos del entrenamiento federado formal (ronda 15), **sin entrenar nada nuevo**, y los evalúa **solo en `val`**:
+
+- **Heterogéneo:** los 5 modelos elegidos (arquitecturas distintas), con voto suave (promedio de probabilidades) y voto duro (mayoría de 3 de 5).
+- **Homogéneo:** cada arquitectura con sus 2 variantes del entrenamiento formal (misma arquitectura, distinta tasa), promediadas.
+- **Híbrido:** los 10 modelos (5 arquitecturas x 2 variantes), promediados.
+
+| Candidato (val, 195 granos) | F1 macro (IC 95 %) | Diferencia frente a Swin-Tiny (IC 95 %) |
+|---|---|---|
+| Individual Swin-Tiny (mejor individual en `val`) | 0,748 (0,672–0,812) | — |
+| Heterogéneo, voto suave | 0,735 (0,659–0,804) | −0,013 (−0,069 a +0,042) |
+| Homogéneo Swin-Tiny | 0,734 | −0,014 (−0,043 a +0,008) |
+| Heterogéneo, voto duro | 0,727 | −0,021 |
+| Híbrido (10 modelos) | 0,712 | −0,036 |
+| Homogéneos de las otras 4 arquitecturas | 0,654–0,682 | |
+
+Lectura: en `val` ningún ensemble supera al mejor modelo individual (empate dentro del ruido); el híbrido rinde menos porque incluye la variante inestable de EfficientNet-B0. Se decidió de antemano llevar a `test` como ensemble principal el heterogéneo con voto suave. Tabla completa en `ml/results/ensemble/ensemble_val_resumen.txt`.
+
+## Medición final en `test`
+
+### Prerregistro (antes de usar `test`)
+
+Para que el resultado de `test` no influyera en ninguna decisión, antes de ejecutarlo se fijó por escrito en `ml/results/test_final/preregistro.txt`, y se subió a GitHub (commit `c7e216d`), qué se mide, cómo se reporta y qué modelo usará la app:
+
+- **9 candidatos** (los 5 modelos y 4 ensembles), umbral 0,5, F1 macro como métrica principal; se reportan todos, salgan bien o mal, y no se reentrena nada después.
+- **Tiempo de inferencia** medido con imágenes de `val` (`21_test_final.py --solo-tiempos`), con 2 hilos de CPU para aproximar los 2 vCPU de la t4g.medium de AWS (estimación: la t4g es ARM y no se midió allí):
+
+| Modelo | ms por grano (12 hilos) | ms por grano (2 hilos) | s por lote de 100 granos (2 hilos) |
+|---|---|---|---|
+| EfficientNet-B0 | 13,1 | 19,0 | **1,9** |
+| ResNet-50 | 23,9 | 50,8 | 5,1 |
+| MobileNetV3-L | 23,4 | 52,1 | 5,2 |
+| DeiT-Small | 41,2 | 67,6 | 6,8 |
+| Swin-Tiny | 53,0 | 89,4 | 8,9 |
+| Ensemble heterogéneo (5 modelos) | 154,6 | 278,9 | 27,9 |
+
+- **Regla para el modelo de la app (D-18):** el de mejor F1 en `val` (ronda 15) entre los que clasifican un lote de 100 granos en **4 s o menos**. Motivo del límite: RNF-01 fija 5 a 8 s para *todo* el análisis (subida de fotos, separación de granos, clasificación y respuesta). Orden por F1 en `val`: Swin-Tiny 0,748, ensemble 0,735, DeiT-Small 0,720, EfficientNet-B0 0,682, ResNet-50 0,668, MobileNetV3-L 0,664. **Resultado: EfficientNet-B0**, el único por debajo de 4 s. Si la medición real en la t4g.medium da otros tiempos, se aplica la misma regla con esos tiempos, nunca con los resultados de `test`.
+- **Descartado** (y documentado): comparar el relleno blanco frente al borde suavizado y variantes de augmentation; ninguna palanca probada movió el techo y después de `test` no se podría reentrenar sin invalidar la medición.
+
+### Resultados (`21_test_final.py`, 334 granos, 73 `mala`, usado una sola vez el 26-oct-2026)
+
+| Candidato | F1 macro (IC 95 %) | Exactitud (IC 95 %) | Precisión `mala` | Recall `mala` | Recall `sana` | Matriz (VN / FP / FN / VP) |
+|---|---|---|---|---|---|---|
+| **EfficientNet-B0 (modelo de la app)** | **0,735 (0,677–0,792)** | **0,829 (0,787–0,868)** | 0,629 | 0,534 | 0,912 | 238 / 23 / 34 / 39 |
+| Homogéneo Swin-Tiny | 0,720 (0,660–0,778) | 0,823 (0,784–0,862) | 0,621 | 0,493 | 0,916 | 239 / 22 / 37 / 36 |
+| Híbrido (10 modelos) | 0,716 (0,652–0,773) | 0,829 (0,790–0,868) | 0,660 | 0,452 | 0,935 | 244 / 17 / 40 / 33 |
+| Swin-Tiny | 0,713 (0,650–0,772) | 0,826 (0,787–0,865) | 0,647 | 0,452 | 0,931 | 243 / 18 / 40 / 33 |
+| ResNet-50 | 0,699 (0,640–0,756) | 0,796 (0,754–0,838) | 0,535 | 0,521 | 0,874 | 228 / 33 / 35 / 38 |
+| Heterogéneo, voto duro | 0,694 (0,630–0,756) | 0,823 (0,781–0,862) | 0,659 | 0,397 | 0,943 | 246 / 15 / 44 / 29 |
+| Heterogéneo, voto suave (ensemble principal) | 0,691 (0,627–0,753) | 0,820 (0,778–0,859) | 0,644 | 0,397 | 0,939 | 245 / 16 / 44 / 29 |
+| DeiT-Small | 0,689 (0,626–0,750) | 0,814 (0,772–0,853) | 0,612 | 0,411 | 0,927 | 242 / 19 / 43 / 30 |
+| MobileNetV3-L | 0,638 (0,566–0,704) | 0,817 (0,775–0,856) | 0,731 | 0,260 | 0,973 | 254 / 7 / 54 / 19 |
+
+VN: `sana` bien clasificada; FP: `sana` clasificada como `mala`; FN: `mala` clasificada como `sana`; VP: `mala` bien clasificada. Referencia: predecir siempre `sana` da exactitud 0,781 y F1 macro ≈ 0,44.
+
+Lectura (medido):
+
+- **La elección prerregistrada se sostiene:** EfficientNet-B0 se eligió sin ver `test` y es también el mejor en `test`. Su F1 de 0,735 no está inflado por la selección.
+- **Los intervalos de los 9 candidatos se solapan:** en `test` tampoco se puede afirmar que un modelo sea mejor que otro, igual que en la validación cruzada (≈ 0,69, de 0,66 a 0,72). `test` sale algo más alto, dentro del ruido.
+- **Los ensembles no aportan:** el principal (0,691) queda por debajo del mejor individual y es ~15 veces más lento.
+- **Punto débil común: el recall de `mala`.** El modelo de la app encuentra ~53 % de los granos malos, y cuando dice "mala" acierta el 63 % de las veces. Es coherente con la hipótesis de que el exterior del grano no muestra toda la información con la que se asignó la etiqueta (D-17).
+
 ## Lecciones del entrenamiento
 
 Errores y hallazgos, para no repetirlos:
@@ -588,6 +661,12 @@ python -u ml/src/10_train_federated.py --model DeiT-Small      --rounds 15 --loc
 python -u ml/src/10_train_federated.py --model EfficientNet-B0 --rounds 15 --local-epochs 1 --lr 1.537e-05 --weight-decay 0.01 --clipnorm 1.0 --freeze-bn --tag formal3
 python -u ml/src/10_train_federated.py --model ResNet-50       --rounds 15 --local-epochs 1 --lr 3.010e-05 --clipnorm 1.0 --freeze-bn --tag formal3
 python ml/src/19_fl_summary.py            # necesita también las corridas de la otra variante (ver fl_resumen.txt)
+
+# Ensembles en val, tiempos en CPU (sin leer test) y medición final en test (UNA sola vez)
+python -u ml/src/20_ensemble.py
+python -u ml/src/21_test_final.py --solo-tiempos --hilos 0
+python -u ml/src/21_test_final.py --solo-tiempos --hilos 2
+python -u ml/src/21_test_final.py         # se niega a correr si existe ml/results/test_final/test_usado.txt
 ```
 
 Las tasas exactas (con todos sus decimales) de las dos variantes están en `19_fl_summary.py` y en `ml/results/federated_formal/fl_resumen.csv`.
@@ -605,30 +684,30 @@ Diagnósticos (no forman parte del entrenamiento final): `11_central_check.py` (
 7. Entrenamiento en WSL2 (Ubuntu 24.04) con TensorFlow 2.21.0 y la GPU local.
 8. Pipeline de datos: 224x224, relleno por borde suavizado, augmentation solo en `train` y sin cambios de color.
 9. Modelos preentrenados (transfer learning) con las 5 arquitecturas de la tabla (no confirmado con el profesor); 5 clientes de Federated Learning con reparto estratificado.
-10. Meta de trabajo: F1 macro y exactitud de 95 %, medidas en `test`. Aún no está registrada en el documento de requerimientos (P-02). La validación cruzada muestra que no es alcanzable con estos recortes; el valor de P-02 lo deciden el equipo y el profesor.
+10. Métrica: F1 macro (RNF-07), además de exactitud y recall por clase. La meta inicial de trabajo de 95 % (propia del módulo; el documento de requerimientos no fija un número) resultó inalcanzable con estos datos y se reemplaza por lo medido. Propuesta para P-02 (hecha antes de `test`): F1 macro ≥ 0,65 en `test`.
 11. La selección de tasa, variante y ronda se hace con `val`; `test` se mide una sola vez al final.
 12. Tamaño de entrada 224 (384 no mejora) y balanceo con pesos de clase (el sobremuestreo de `mala` empeora).
 13. No se usa GAN en el entrenamiento formal: empeora el F1 macro (−0,063, IC 95 % −0,099 a −0,029).
 14. Entrenamiento formal: 15 rondas x 1 época local; tasa elegida dentro de Federated Learning (dos variantes, promedio de las rondas 11–15); se entrega la ronda 15.
 15. Los modelos entrenados se entregan por **GitHub Releases**, no dentro de Git (Swin-Tiny pesa ~110 MB y GitHub rechaza archivos de más de 100 MB; además Git guarda cada versión para siempre).
+16. No se comparan el relleno blanco ni otras variantes de augmentation: ninguna palanca probada movió el techo y se cerró antes de usar `test` (prerregistro).
+17. **Modelo de la app: EfficientNet-B0** (federado, variante `formal3`, ronda 15), elegido antes de `test` con la regla de D-18: mejor F1 en `val` entre los que clasifican 100 granos en 4 s o menos (2 hilos de CPU, estimación de la t4g.medium). Si la medición real en AWS cambia los tiempos, se aplica la misma regla.
+18. Los ensembles se reportan pero no se usan en la app: no superan al mejor modelo individual y son ~15 veces más lentos.
 
 ## Notas para el equipo (pendientes fuera del módulo de IA)
 
 1. **Nombres de los conjuntos (documento de requerimientos, Cristhian).**
    Lo que el documento llama "validación" (`recortes_script/val`, 334 granos) aquí es `test`: se usa una sola vez, para la medición final (RNF-07) y la tabla comparativa de los 5 modelos (D-18). La selección de modelo e hiperparámetros se hace con `val` (195 granos, 15 % del train del equipo). Sugerencia: aclararlo en D-18 y RNF-07 para que nadie elija el modelo mirando los 334.
 2. **Corrección del porcentaje del lote (back-end, RF-10, Cristhian).**
-   Los errores del modelo no se cancelan: sesgan el % de granos sanos del lote. Ejemplo con valores provisionales (acierta 81 % de sanas y 49 % de malas): un lote real de 90 % sanos saldría como 78 % ("Fuera de norma" en vez de "Estándar").
-   Corrección: `p_real = (p_obs − (1 − recall_mala)) / (recall_sana − (1 − recall_mala))`, limitada a [0, 1]. Los valores definitivos de `recall_sana` y `recall_mala` se entregan con el modelo elegido, medidos en `test`.
-3. **Preprocesamiento en el servicio de IA (RF-08, Cristhian).** Se entrega con el modelo elegido: mismo relleno del pipeline y misma escala/desplazamiento del `image_converter` del preset.
+   Los errores del modelo no se cancelan: sesgan el % de granos sanos del lote. Con el modelo de la app (EfficientNet-B0, medido en `test`: recall `sana` 0,912 y recall `mala` 0,534), un lote real de 90 % sanos saldría como ~86,7 % ("Corriente" en vez de "Estándar").
+   Corrección: `p_real = (p_obs − (1 − recall_mala)) / (recall_sana − (1 − recall_mala))`, limitada a [0, 1]. Con estos valores: `p_real = (p_obs − 0,466) / 0,446`.
+   **Advertencia:** la corrección multiplica el error de muestreo por ≈ 2,2 (1 / 0,446). Con 100 granos, el error típico del porcentaje observado (~3 puntos) pasa a ~7 puntos tras corregir; además, los recalls tienen su propia incertidumbre (73 `mala` en `test`). La regla de D-10 de "repetir la muestra a menos de 3 puntos de un límite" debería ampliarse o analizarse una muestra mayor.
+3. **Preprocesamiento en el servicio de IA (RF-08, Cristhian).** Se entrega con el modelo elegido: mismo relleno del pipeline y misma escala/desplazamiento del `image_converter` del preset (en el JSON de la release).
 4. **Resolución de los granos en la app (P-12, P-13).** Los recortes de entrenamiento salen de fotos de un solo grano (~600 px de largo). En una foto de un lote con muchos granos, cada grano tendrá menos píxeles; conviene que la guía de captura lo tenga en cuenta.
 
 ## Pendientes
 
-- Ensembles (Topic 5) con los 5 modelos del entrenamiento formal (promedio de probabilidades), evaluados en `val`.
-- Medir `test` **una sola vez** para los 5 modelos y el ensemble; tabla comparativa de D-18 con F1, precisión, recall y tiempo por grano en una CPU parecida a la t4g.medium.
-- Exportar los modelos (`.keras` completo + JSON con preprocesamiento, clases, umbral, versión y métricas) y publicarlos en una **GitHub Release**.
+- Exportar los modelos (`.keras` completo + JSON con preprocesamiento, clases, umbral, versión y métricas de `test`) y publicarlos en una **GitHub Release**, con EfficientNet-B0 marcado como modelo de la app.
 - Confirmar con el profesor la partición ≈ 68/12/20 y el uso de modelos preentrenados.
-- Registrar la meta en P-02 del documento de requerimientos y decidir (equipo y profesor) qué se reporta si no se alcanza el 95 %; revisar RF-08 y RNF-07 (P-14).
-- Pasar a Cristhian el preprocesamiento y los recalls del modelo elegido (ver "Notas para el equipo").
-- Comparar con `val` el relleno (blanco contra borde suavizado) y el augmentation.
-- Guardar los prompts usados con IA en `docs/prompts/`.
+- Documento de requerimientos (Cristhian, con Julián como responsable de P-02): registrar en P-02 el mínimo (propuesta: F1 macro ≥ 0,65 en `test`), actualizar RF-08 y RNF-07 con lo medido (P-14) y aclarar los nombres de los conjuntos (ver "Notas para el equipo").
+- Medir el tiempo de inferencia en la t4g.medium real cuando exista el despliegue (D-16) y, si cambia, aplicar la regla del prerregistro.

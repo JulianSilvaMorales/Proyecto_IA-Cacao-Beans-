@@ -2,11 +2,12 @@
 Nombre: README.md
 Descripcion: Documentacion del modulo de IA de InspectIA: datos, particion, pipeline, entorno, los 5 modelos,
              Federated Learning, diagnosticos, validacion cruzada, Hyperband, experimento de GAN,
-             entrenamiento federado formal, scripts, resultados, decisiones y pendientes.
+             entrenamiento federado formal, ensembles, prerregistro y medicion en test, modelos
+             exportados (release modelos-v1.0), scripts, resultados, decisiones y pendientes.
 Fecha_creacion: 2026-10-09
 Actualizacion: 2026-10-26
 Autor: Julian Andres Silvas Morales
-Version: 4.2
+Version: 4.3
 -->
 
 # Clasificación de granos de cacao (Proyecto final IA): InspectIA
@@ -609,6 +610,8 @@ Lectura (medido):
 
 **Descarga:** https://github.com/JulianSilvaMorales/Proyecto_IA-Cacao-Beans-/releases/tag/modelos-v1.0
 
+Publicada el 26-oct-2026 (etiqueta `modelos-v1.0` sobre `main`, marcada como la release más reciente). Verificado con la API de GitHub: están los 13 archivos y cada uno tiene el mismo tamaño y el mismo SHA-256 que la copia local y que `ml/results/export/manifest.json` (ninguno se corrompió al subir). Copia local no versionada en `modelos/modelos-v1.0/`.
+
 **Por qué por GitHub Releases y no dentro de Git:** Swin-Tiny pesa ~105 MB y GitHub rechaza archivos de más de 100 MB; además Git guarda cada versión para siempre. La release queda ligada a una versión del código y admite archivos de hasta 2 GB.
 
 `22_export.py` exporta los 5 modelos del entrenamiento federado formal (ronda 15) **listos para usar**: cada uno recibe el recorte de un grano ya rellenado y redimensionado a 224x224 (RGB, valores 0–255) y devuelve `[P(sana), P(mala)]`. La escala del preset y el softmax van dentro del modelo, así que el servicio de IA no tiene que reproducir ese preprocesamiento.
@@ -654,6 +657,10 @@ Errores y hallazgos, para no repetirlos:
     - **Swin-Tiny sin XLA no cabe en 8 GB con lote 32**; con `jit_compile="auto"` (XLA) sí, a costa de ~270 s de compilación por modelo.
 11. **Las tasas óptimas en centralizado no son las óptimas en Federated Learning** (ver "Entrenamiento federado formal"): hay que ajustarlas en el mismo escenario en que se entrena el modelo que se entrega.
 12. **Comandos desde CMD hacia WSL:** CMD interpreta los `|` dentro de comillas anidadas y `wsl -- bash -lc "..."` expande las variables `$` antes de tiempo. Lo robusto es poner el comando en un script `.sh` y ejecutar `wsl -d Ubuntu-24.04 -- bash ruta/script.sh`.
+13. **Exportación de modelos** (`22_export.py`):
+    - Distintos grafos de TensorFlow (el converter dentro de `tf.data`, `predict` compilado, SavedModel) redondean distinto: hasta ~0,002 de diferencia en probabilidad para el mismo modelo y la misma imagen (medido). No se puede exigir igualdad exacta entre grafos distintos; lo que se exige es **0 cambios de clase**, y exactitud total solo al recargar el mismo `.keras`.
+    - `tf.saved_model.load(ruta).serve(x)` en una sola línea falla ("Called a function referencing variables which have been deleted"): el objeto cargado se libera antes de usarse. Hay que guardarlo en una variable. Se descubrió probando `inferencia.py` de punta a punta, no en la verificación interna: **probar el ejemplo tal como lo usará el equipo**.
+14. **Archivos del proyecto en Windows:** todo va dentro de `Proyecto_IA(Cacao-Beans)`; lo que no se sube a Git va en una subcarpeta ignorada (`modelos/`), comprobando con `git status` que no aparece.
 
 ## Cómo reproducir
 
@@ -724,7 +731,7 @@ Diagnósticos (no forman parte del entrenamiento final): `11_central_check.py` (
 12. Tamaño de entrada 224 (384 no mejora) y balanceo con pesos de clase (el sobremuestreo de `mala` empeora).
 13. No se usa GAN en el entrenamiento formal: empeora el F1 macro (−0,063, IC 95 % −0,099 a −0,029).
 14. Entrenamiento formal: 15 rondas x 1 época local; tasa elegida dentro de Federated Learning (dos variantes, promedio de las rondas 11–15); se entrega la ronda 15.
-15. Los modelos entrenados se entregan por **GitHub Releases**, no dentro de Git (Swin-Tiny pesa ~110 MB y GitHub rechaza archivos de más de 100 MB; además Git guarda cada versión para siempre).
+15. Los modelos entrenados se entregan por **GitHub Releases**, no dentro de Git (Swin-Tiny pesa ~105 MB y GitHub rechaza archivos de más de 100 MB; además Git guarda cada versión para siempre). Publicados en la release `modelos-v1.0`.
 16. No se comparan el relleno blanco ni otras variantes de augmentation: ninguna palanca probada movió el techo y se cerró antes de usar `test` (prerregistro).
 17. **Modelo de la app: EfficientNet-B0** (federado, variante `formal3`, ronda 15), elegido antes de `test` con la regla de D-18: mejor F1 en `val` entre los que clasifican 100 granos en 4 s o menos (2 hilos de CPU, estimación de la t4g.medium). Si la medición real en AWS cambia los tiempos, se aplica la misma regla.
 18. Los ensembles se reportan pero no se usan en la app: no superan al mejor modelo individual y son ~15 veces más lentos.

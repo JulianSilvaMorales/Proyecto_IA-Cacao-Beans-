@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "fecha": "2026-10-26",
+  "modelo_app": "EfficientNet-B0",
+  "archivos": {
+    "inspectia_MobileNetV3-L_v1.0.keras": "e9e30f7afce917f94252b9bbf144fcd46de40ec0f86f762db4408b02e92b77a2",
+    "inspectia_MobileNetV3-L_v1.0.json": "9d227adcf606d04521ae3b65d244968bfbd43e888135fa9ee84e920620612b3b",
+    "inspectia_EfficientNet-B0_v1.0.keras": "5677c490087fd36ef304e7fed60ef3c325059cba8c2fd886750173d08f6edf05",
+    "inspectia_EfficientNet-B0_v1.0_savedmodel.zip": "eb9a64394c51fdff8fc16e01fff71e3b3693bc36e43cafb0ddbb34ca5b765bfb",
+    "inspectia_EfficientNet-B0_v1.0.json": "ab417302d000066f60cf27cbfa871c4945d141f641f0c8202c67c3b37321dcad",
+    "inspectia_ResNet-50_v1.0.keras": "4ce7179ad4d1d48ca6181a38f5e9c5c35ab7eda065c913348908e8ae2f30e408",
+    "inspectia_ResNet-50_v1.0.json": "c6dedc4009641c19a86b1b9043999ce3e76e8d03517fe69454b65ea99072a5bf",
+    "inspectia_Swin-Tiny_v1.0.keras": "4ef056c900ac81f320cb62c28f6e7e3a34df0aa693f1cf5a1712b6866253302f",
+    "inspectia_Swin-Tiny_v1.0.json": "5b515b1716d1c98851526424c6ac747b7d5c2bbd557e5e91d4165ec9d918a11a",
+    "inspectia_DeiT-Small_v1.0.keras": "6e9fc9ef53c0b0a6df739aecb2d13958d5fe99d60032bc1f1966954d9a28aae6",
+    "inspectia_DeiT-Small_v1.0.json": "de89e06cb2f273bf5620757b2fade80905865bc776ac44bcfc3f42137810e73a",
+    "inferencia.py": "597e13ee81aaf2059710058363aeed368ffb76bff20150efc8c9454b69cf4360"
+  }
+}

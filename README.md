@@ -27,7 +27,8 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 - [x] Hyperparameter tuning con Hyperband de los 5 modelos (30 pruebas cada uno): sin ganador claro; mejores épocas entre 3 y 12
 - [ ] Confirmar la partición con el profesor
 - [ ] **Entrenamiento formal de los 5 modelos con Federated Learning** (no se ha hecho)
-- [ ] Ensembles y GAN
+- [x] Experimento de GAN para la clase `mala`: empeora (F1 −0,063); **no se usa** (ver "Experimento de GAN")
+- [ ] Ensembles
 - [ ] Medición final en `test` (una sola vez)
 - [ ] Back-end, front-end, pruebas, deployment, monitoreo
 
@@ -84,7 +85,8 @@ Proyecto_IA(Cacao-Beans)/             (en Ubuntu: ~/cacao/)
         ├── errors_val.png
         ├── diag_bn_softmax.txt
         ├── cv_ceiling/                validación cruzada: <modelo>_<tamaño>_folds.csv y _resumen.txt
-        └── hyperband/                 Hyperband: <modelo>_trials.csv y _resumen.txt
+        ├── hyperband/                 Hyperband: <modelo>_trials.csv y _resumen.txt
+        └── gan/                       experimento de GAN: gan_resumen.txt, gan_folds.csv, muestras_particion<k>.png
 ```
 
 Fuera del repo (no se versiona): `~/cacao_runs/` guarda los checkpoints y el historial de cada entrenamiento, `~/tune/` guarda los logs de la cuadrícula de tasas y `~/.cache/kagglehub/` guarda los pesos preentrenados descargados.
@@ -408,6 +410,30 @@ Lectura:
 - **Lo que aporta (medido):** el weight decay no ayuda (gana 0 en 4 de 5 modelos) y **las mejores épocas son pocas, de 3 a 12**. Las tasas elegidas son algo más altas que las de la cuadrícula en 4 modelos (9e-5 frente a 1e-5–3e-5), dentro del ruido.
 - Swin-Tiny se ajustó con XLA (`--jit`) y una prueba por proceso; los otros 4 sin XLA y 5 pruebas por proceso (ver "Lecciones", punto 10).
 
+## Experimento de GAN para la clase `mala` (Topic 1): por qué no se usa
+
+El profesor incluyó las GANs en la preparación del dataset. Antes del entrenamiento formal se probó si generar `mala` sintéticas mejora al clasificador (`18_gan_cv.py`):
+
+- **Diseño, sin leakage:** las mismas 5 particiones de la validación cruzada de EfficientNet-B0 (comprobado por ruta). En cada partición se entrena una **DCGAN de 128×128 con spectral normalization y DiffAugment** (técnica para GANs con pocos cientos de imágenes) **solo con las ~240 `mala` del train de esa partición**, se generan ~560 `mala` sintéticas hasta igualar a las `sana` y se entrena EfficientNet-B0 con reales + sintéticas, con la misma configuración que la validación cruzada. Comparación **pareada** con la línea base sin GAN, sobre los mismos 1300 granos, con bootstrap de la diferencia. No usa `test`.
+
+| Métrica | Con GAN | Sin GAN | Diferencia (IC 95 %) |
+|---|---|---|---|
+| F1 macro | 0,629 | 0,692 | **−0,063 (−0,099 a −0,029)** |
+| Exactitud | 0,761 | 0,778 | −0,018 (−0,042 a +0,006) |
+| Recall `mala` | 0,357 | 0,540 | **−0,183 (−0,246 a −0,122)** |
+| Recall `sana` | 0,882 | 0,850 | +0,032 (+0,008 a +0,056) |
+
+![Mala sintéticas frente a reales](ml/results/gan/muestras_particion1.png)
+
+Por qué no se usa la GAN:
+
+1. **Empeora el modelo de forma significativa (medido):** el intervalo de la diferencia de F1 macro queda entero por debajo de 0, y el recall de `mala` cae 18 puntos.
+2. **Las imágenes sintéticas no son realistas (visto en las muestras de las 5 particiones):** la GAN colapsa a casi una sola forma (*mode collapse*) con artefactos de tablero, y no reproduce la textura del grano. Con ~240 imágenes de entrenamiento no alcanza para aprender la variedad de los granos `mala`.
+3. **Explicación del empeoramiento (hipótesis coherente con los números):** el clasificador aprende a reconocer los artefactos de las sintéticas como "mala"; las `mala` reales no los tienen, así que muchas pasan como `sana` (baja el recall de `mala` y sube el de `sana`).
+4. Es coherente con el sobremuestreo de `mala` ×3, que también empeoró (F1 0,651): con estos datos, añadir más `mala` artificiales no aporta información nueva.
+
+Limitaciones: es una sola arquitectura de GAN (DCGAN + DiffAugment, 6000 pasos, 128 px ampliados a 224). **No se probó** una GAN más potente (por ejemplo StyleGAN2-ADA), que podría generar imágenes mejores, pero su coste es mucho mayor y la evidencia de este experimento y del sobremuestreo no apunta a que vaya a subir el techo.
+
 ## Cómo reproducir
 
 1. Descargar y extraer el dataset en `data/raw/` (ver "Descarga del dataset").
@@ -444,6 +470,7 @@ Scripts de diagnóstico (no son parte del entrenamiento final):
 - `15_diag_bn_softmax.py`: comprueba el montaje de los 5 modelos (BatchNorm congeladas y si la salida aplica softmax). Con `--entrenar` repite las corridas cortas que encontraron el fallo de MobileNet.
 - `16_cv_ceiling.py`: validación cruzada de 5 particiones sobre `train` + `val` con intervalos por bootstrap. Opciones `--model --lr --epochs --img-size --oversample`. No usa `test`.
 - `17_hyperband.py`: Hyperband (keras-tuner) por modelo sobre la tasa, el weight decay de AdamW y las épocas, con objetivo F1 macro en `val`. Opciones `--model --max-epochs --factor --trials-per-process --jit`. Sale con código 3 cada `--trials-per-process` pruebas (5 por defecto) para liberar la GPU; hay que relanzarlo hasta que salga con 0: `until python -u ml/src/17_hyperband.py --model ResNet-50; [ $? -ne 3 ]; do :; done`. Swin-Tiny necesita `--trials-per-process 1 --jit`. Estado en `~/cacao_runs/hyperband/`. No usa `test`.
+- `18_gan_cv.py`: experimento de GAN (DCGAN 128 + DiffAugment por partición) comparado de forma pareada con la validación cruzada de EfficientNet-B0. Requiere `~/cacao_runs/cv/EfficientNet-B0_224_oof.npz` (de `16_cv_ceiling.py`). Opciones `--gan-steps --gan-batch --epochs --lr --folds`. No usa `test`.
 
 Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cropped_allclasses`; solo corren con `data/raw/` completo. El 03 se eliminó (era la partición sobre `cropped`).
 
@@ -469,6 +496,7 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 10. Meta de trabajo: F1 macro y exactitud de 95 %, medidas en `test`. Aún no está registrada en el documento de requerimientos (P-02). La validación cruzada muestra que no es alcanzable con estos recortes (ver "Validación cruzada"); el valor de P-02 lo deciden el equipo y el profesor.
 11. La selección de tasa y de ronda se hace con `val`; `test` se mide una sola vez al final.
 12. Tamaño de entrada 224 (384 no mejora en la validación cruzada) y balanceo con pesos de clase (el sobremuestreo de `mala` empeora).
+13. No se usa GAN en el entrenamiento formal: el experimento la midió y empeora el F1 macro (−0,063, IC 95 % −0,099 a −0,029).
 
 ## Notas para el equipo (pendientes fuera del módulo de IA)
 
@@ -490,7 +518,7 @@ Los scripts 00 a 02 documentan la auditoría que llevó a descartar `dataset_cro
 ## Pendientes
 
 - Entrenar formalmente los 5 modelos con Federated Learning con los hiperparámetros de Hyperband (pocas épocas: las mejores salen entre la 3 y la 12) y comparar con `val`.
-- Ensembles (Topic 5) y GAN para la clase minoritaria (solo `train`). Ojo: el sobremuestreo de `mala` ya empeoró en la validación cruzada.
+- Ensembles (Topic 5) con los 5 modelos del entrenamiento formal.
 - Comparar con `val` el relleno (blanco contra borde suavizado) y el augmentation. (224 contra 384 ya está medido: 384 no mejora.)
 - Medir `test` una sola vez al final, y el tiempo por grano en una CPU parecida a la t4g.medium (D-18).
 - Confirmar con el profesor la partición ≈ 68/12/20 y el uso de modelos preentrenados.

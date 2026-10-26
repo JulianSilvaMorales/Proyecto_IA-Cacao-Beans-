@@ -70,7 +70,7 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 
 **Resultado principal:** el **modelo de la app es EfficientNet-B0** (federado, ronda 15), elegido **antes** de mirar `test` con la regla de D-18 (el de mejor F1 en `val` entre los que clasifican un lote de 100 granos en 4 s o menos). En `test` (334 granos, usado una sola vez) logra **F1 macro 0,735 (IC 95 % 0,677–0,792) y exactitud 0,829 (0,787–0,868)**, con recall de `mala` 0,534 y de `sana` 0,912. Los 9 candidatos medidos (5 modelos y 4 ensembles) quedan entre 0,64 y 0,74 con intervalos solapados, en línea con el techo de la validación cruzada (F1 macro ≈ 0,69, IC 95 % ≈ 0,66–0,72). Ninguna palanca probada (5 arquitecturas, 384 px, sobremuestreo, GAN, Hyperband, umbral, ensembles) movió ese techo.
 
-Sobre la meta: el documento de requerimientos no fija un número; RNF-07 remite a P-02 ("el F1-score mínimo que se defina"). La meta inicial de trabajo de 95 % de F1 macro y exactitud (propia del módulo, no del documento) resultó inalcanzable con estos datos y se reemplaza por lo medido. Propuesta para P-02, hecha antes de usar `test` a partir de la validación cruzada: **F1 macro ≥ 0,65 en `test`**, que el modelo de la app cumple.
+Sobre la meta: el documento de requerimientos no fija un número; RNF-07 remite a P-02 ("el F1-score mínimo que se defina"). La meta inicial de trabajo de 95 % de F1 macro y exactitud (propia del módulo, no del documento) resultó inalcanzable con estos datos y se reemplaza por lo medido. **Decisión para P-02 (Julián, responsable de P-02):** el mínimo aceptable es **F1 macro ≥ 0,65 en `test`**. Se fijó a partir de la validación cruzada (techo ≈ 0,69, IC 95 % ≈ 0,66–0,72), antes de usar `test`, como un mínimo que un modelo de este techo debe cumplir. El modelo de la app lo cumple: 0,735 (IC 95 % 0,677–0,792); incluso el extremo inferior de su intervalo supera 0,65.
 
 ## Estructura de carpetas
 
@@ -726,7 +726,7 @@ Diagnósticos (no forman parte del entrenamiento final): `11_central_check.py` (
 7. Entrenamiento en WSL2 (Ubuntu 24.04) con TensorFlow 2.21.0 y la GPU local.
 8. Pipeline de datos: 224x224, relleno por borde suavizado, augmentation solo en `train` y sin cambios de color.
 9. Modelos preentrenados (transfer learning) con las 5 arquitecturas de la tabla (no confirmado con el profesor); 5 clientes de Federated Learning con reparto estratificado.
-10. Métrica: F1 macro (RNF-07), además de exactitud y recall por clase. La meta inicial de trabajo de 95 % (propia del módulo; el documento de requerimientos no fija un número) resultó inalcanzable con estos datos y se reemplaza por lo medido. Propuesta para P-02 (hecha antes de `test`): F1 macro ≥ 0,65 en `test`.
+10. Métrica: F1 macro (RNF-07), además de exactitud y recall por clase. La meta inicial de trabajo de 95 % (propia del módulo; el documento de requerimientos no fija un número) resultó inalcanzable con estos datos y se reemplaza por lo medido. **P-02 decidido: F1 macro ≥ 0,65 en `test`** (mínimo fijado con la validación cruzada, antes de usar `test`); el modelo de la app lo cumple (0,735).
 11. La selección de tasa, variante y ronda se hace con `val`; `test` se mide una sola vez al final.
 12. Tamaño de entrada 224 (384 no mejora) y balanceo con pesos de clase (el sobremuestreo de `mala` empeora).
 13. No se usa GAN en el entrenamiento formal: empeora el F1 macro (−0,063, IC 95 % −0,099 a −0,029).
@@ -803,5 +803,5 @@ Diagnósticos (no forman parte del entrenamiento final): `11_central_check.py` (
 ## Pendientes
 
 - Confirmar con el profesor la partición ≈ 68/12/20 y el uso de modelos preentrenados.
-- Documento de requerimientos (Cristhian, con Julián como responsable de P-02): registrar en P-02 el mínimo (propuesta: F1 macro ≥ 0,65 en `test`), actualizar RF-08 y RNF-07 con lo medido (P-14) y aclarar los nombres de los conjuntos (ver "Notas para el equipo").
+- Documento de requerimientos (Cristhian): registrar en P-02 la decisión de Julián (**F1 macro ≥ 0,65 en `test`**) y darlo por resuelto, actualizar RF-08 y RNF-07 con lo medido (P-14: F1 macro 0,735 del modelo de la app, que cumple el mínimo) y aclarar los nombres de los conjuntos (ver "Notas para el equipo").
 - Medir el tiempo de inferencia en la t4g.medium real cuando exista el despliegue (D-16) y, si cambia, aplicar la regla del prerregistro.

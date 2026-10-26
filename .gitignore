@@ -7,3 +7,6 @@ __pycache__/
 *.h5
 *.pt
 *.pth
+# Modelos exportados (se publican en GitHub Releases, no en Git)
+modelos/
+*.keras

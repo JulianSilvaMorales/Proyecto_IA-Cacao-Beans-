@@ -6,7 +6,7 @@ Descripcion: Documentacion del modulo de IA de InspectIA: datos, particion, pipe
 Fecha_creacion: 2026-10-09
 Actualizacion: 2026-10-26
 Autor: Julian Andres Silvas Morales
-Version: 4.1
+Version: 4.2
 -->
 
 # Clasificación de granos de cacao (Proyecto final IA): InspectIA
@@ -39,11 +39,12 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 14. [Entrenamiento federado formal](#entrenamiento-federado-formal-topic-6)
 15. [Ensembles](#ensembles-topic-5)
 16. [Medición final en test](#medición-final-en-test)
-17. [Lecciones del entrenamiento](#lecciones-del-entrenamiento)
-18. [Cómo reproducir](#cómo-reproducir)
-19. [Decisiones acordadas](#decisiones-acordadas)
-20. [Notas para el equipo](#notas-para-el-equipo-pendientes-fuera-del-módulo-de-ia)
-21. [Pendientes](#pendientes)
+17. [Modelos exportados (release modelos-v1.0)](#modelos-exportados-release-modelos-v10)
+18. [Lecciones del entrenamiento](#lecciones-del-entrenamiento)
+19. [Cómo reproducir](#cómo-reproducir)
+20. [Decisiones acordadas](#decisiones-acordadas)
+21. [Notas para el equipo](#notas-para-el-equipo-pendientes-fuera-del-módulo-de-ia)
+22. [Pendientes](#pendientes)
 
 ## Estado actual y resultado principal
 
@@ -64,7 +65,7 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 | Entrenamiento federado formal de los 5 modelos (Topic 6) | ✅ | 10, 19 |
 | Ensembles (Topic 5) | ✅ no superan al mejor modelo individual | 20 |
 | Prerregistro y medición final en `test` (una sola vez) | ✅ | 21 |
-| Exportar los modelos y publicarlos (GitHub Releases) | ⏳ pendiente | — |
+| Exportar los modelos y publicarlos en la release `modelos-v1.0` | ✅ | 22 |
 
 **Resultado principal:** el **modelo de la app es EfficientNet-B0** (federado, ronda 15), elegido **antes** de mirar `test` con la regla de D-18 (el de mejor F1 en `val` entre los que clasifican un lote de 100 granos en 4 s o menos). En `test` (334 granos, usado una sola vez) logra **F1 macro 0,735 (IC 95 % 0,677–0,792) y exactitud 0,829 (0,787–0,868)**, con recall de `mala` 0,534 y de `sana` 0,912. Los 9 candidatos medidos (5 modelos y 4 ensembles) quedan entre 0,64 y 0,74 con intervalos solapados, en línea con el techo de la validación cruzada (F1 macro ≈ 0,69, IC 95 % ≈ 0,66–0,72). Ninguna palanca probada (5 arquitecturas, 384 px, sobremuestreo, GAN, Hyperband, umbral, ensembles) movió ese techo.
 
@@ -75,7 +76,9 @@ Sobre la meta: el documento de requerimientos no fija un número; RNF-07 remite 
 ```
 Proyecto_IA(Cacao-Beans)/              (en Ubuntu: ~/cacao/)
 ├── README.md
-├── .gitignore                          excluye data/raw/*, data/processed/*, __pycache__/, .venv/, *.h5, *.pt, *.pth
+├── .gitignore                          excluye data/raw/*, data/processed/*, modelos/, __pycache__/, .venv/, *.h5, *.pt, *.pth, *.keras
+├── modelos/                            NO versionado: copia local de los modelos exportados
+│   └── modelos-v1.0/                           los 13 archivos de la release modelos-v1.0 (+ NOTAS_RELEASE.md)
 ├── data/
 │   ├── raw/                            NO versionado (solo .gitkeep): dataset original de Kaggle
 │   │   ├── .gitkeep
@@ -117,8 +120,9 @@ Proyecto_IA(Cacao-Beans)/              (en Ubuntu: ~/cacao/)
         ├── gan/                                18: experimento de GAN (gan_resumen.txt, gan_folds.csv, muestras_particion<k>.png)
         ├── federated_formal/                   19: entrenamiento federado formal (historiales, fl_resumen.*, modelos_elegidos.json)
         ├── ensemble/                           20: ensembles en val (ensemble_val.csv, ensemble_val_resumen.txt)
-        └── test_final/                         21: preregistro.txt, tiempos_cpu_*.csv, test_resultados.csv, test_resumen.txt,
-                                                    test_metricas.json y test_usado.txt (marca de que test ya se usó)
+        ├── test_final/                         21: preregistro.txt, tiempos_cpu_*.csv, test_resultados.csv, test_resumen.txt,
+        │                                           test_metricas.json y test_usado.txt (marca de que test ya se usó)
+        └── export/manifest.json                22: SHA-256 de los archivos de la release modelos-v1.0
 ```
 
 **Fuera del repo (no se versiona, en Ubuntu):**
@@ -130,6 +134,7 @@ Proyecto_IA(Cacao-Beans)/              (en Ubuntu: ~/cacao/)
 | `~/cacao_runs/hyperband/<modelo>/` | Estado de keras-tuner y pesos de cada prueba |
 | `~/cacao_runs/gan/` | Generadores de la GAN y probabilidades del experimento |
 | `~/cacao_runs/ensemble/`, `~/cacao_runs/test_final/` | Probabilidades de cada modelo en `val` y en `test` |
+| `~/cacao_export/modelos-v1.0/` | Modelos exportados (los mismos archivos de la release `modelos-v1.0`) |
 | `~/cacao_runs/f1_*`, `v2_*` | Pruebas federadas de diagnóstico con EfficientNet-B0 |
 | `~/cacao_runs/smoke_*`, `t1_*`, `t2_*`, `t3_*` | Corridas con el error de doble preprocesamiento: **no son evidencia** (ver "Lecciones", punto 1) |
 | `~/tune/` | Logs de la cuadrícula de tasas |
@@ -165,6 +170,7 @@ Todos en `ml/src/`, con header (nombre, descripción, fechas, autor, versión), 
 | `19_fl_summary.py` | Resume el entrenamiento federado formal y elige la variante de cada modelo | `ml/results/federated_formal/` | Entrenamiento formal |
 | `20_ensemble.py` | **Ensembles** heterogéneo, homogéneo e híbrido con los modelos federados, solo en `val` | `ml/results/ensemble/` | Ensembles |
 | `21_test_final.py` | **Medición final en `test`, de un solo uso** (se bloquea tras usarse); `--solo-tiempos --hilos N` mide el tiempo por grano en CPU sin leer `test` | `ml/results/test_final/` | Medición final |
+| `22_export.py` | **Exporta los 5 modelos** para la app (`.keras` y SavedModel del modelo de la app), con ficha JSON, `inferencia.py` y verificación | `~/cacao_export/modelos-v1.0/`, `ml/results/export/manifest.json` | Modelos exportados |
 
 El script que generó los recortes (`generar_recortes.py`) no está en `ml/src/`: viene dentro de `recortes_script/` (ver "Recortes propios").
 
@@ -599,6 +605,32 @@ Lectura (medido):
 - **Los ensembles no aportan:** el principal (0,691) queda por debajo del mejor individual y es ~15 veces más lento.
 - **Punto débil común: el recall de `mala`.** El modelo de la app encuentra ~53 % de los granos malos, y cuando dice "mala" acierta el 63 % de las veces. Es coherente con la hipótesis de que el exterior del grano no muestra toda la información con la que se asignó la etiqueta (D-17).
 
+## Modelos exportados (release modelos-v1.0)
+
+**Descarga:** https://github.com/JulianSilvaMorales/Proyecto_IA-Cacao-Beans-/releases/tag/modelos-v1.0
+
+**Por qué por GitHub Releases y no dentro de Git:** Swin-Tiny pesa ~105 MB y GitHub rechaza archivos de más de 100 MB; además Git guarda cada versión para siempre. La release queda ligada a una versión del código y admite archivos de hasta 2 GB.
+
+`22_export.py` exporta los 5 modelos del entrenamiento federado formal (ronda 15) **listos para usar**: cada uno recibe el recorte de un grano ya rellenado y redimensionado a 224x224 (RGB, valores 0–255) y devuelve `[P(sana), P(mala)]`. La escala del preset y el softmax van dentro del modelo, así que el servicio de IA no tiene que reproducir ese preprocesamiento.
+
+| Archivo de la release | Tamaño | Para qué |
+|---|---|---|
+| `inspectia_EfficientNet-B0_v1.0_savedmodel.zip` | 29 MB | **Modelo de la app**, formato SavedModel: solo necesita TensorFlow (recomendado para el servicio de IA) |
+| `inspectia_EfficientNet-B0_v1.0.keras` | 16 MB | Modelo de la app, formato Keras (necesita `keras-hub`) |
+| `inspectia_MobileNetV3-L_v1.0.keras`, `..._ResNet-50_...`, `..._Swin-Tiny_...`, `..._DeiT-Small_...` | 17 / 90 / 105 / 83 MB | Los otros 4 modelos (tabla comparativa de D-18) |
+| `inspectia_<modelo>_v1.0.json` | — | Ficha: entrada y preparación, clases, umbral, entrenamiento, métricas en `test` y `val`, tiempos, corrección del lote, versiones, SHA-256 |
+| `inferencia.py` | — | Ejemplo autocontenido: `preparar()` (igual a `07_data_pipeline.load_image`) y predicción con `.keras` o SavedModel |
+| `manifest.json` | — | SHA-256 de todos los archivos (copia en `ml/results/export/manifest.json`) |
+
+Uso (TensorFlow 2.21.0; para `.keras` también keras-hub 0.32.0):
+
+```bash
+python inferencia.py inspectia_EfficientNet-B0_v1.0_savedmodel recorte.jpg   # carpeta descomprimida del .zip
+python inferencia.py inspectia_EfficientNet-B0_v1.0.keras recorte.jpg
+```
+
+**Verificación (medido):** cada archivo se recargó y se comparó con el modelo original en `val`. El `.keras` recargado da exactamente lo mismo (diferencia 0). Frente a las probabilidades con las que se reportaron `val` y `test` (calculadas con el converter dentro de `tf.data`), y entre el `.keras` y el SavedModel, la diferencia es menor a 0,002 en probabilidad y **no cambia ninguna clase**: distintos grafos de TensorFlow redondean distinto. `inferencia.py` se probó de punta a punta con los dos formatos (un recorte `mala` real: P(mala) = 0,947 en ambos).
+
 ## Lecciones del entrenamiento
 
 Errores y hallazgos, para no repetirlos:
@@ -667,6 +699,9 @@ python -u ml/src/20_ensemble.py
 python -u ml/src/21_test_final.py --solo-tiempos --hilos 0
 python -u ml/src/21_test_final.py --solo-tiempos --hilos 2
 python -u ml/src/21_test_final.py         # se niega a correr si existe ml/results/test_final/test_usado.txt
+
+# Exportación de los 5 modelos (necesita los resultados de test y de 20_ensemble.py)
+python -u ml/src/22_export.py              # -> ~/cacao_export/modelos-v1.0/
 ```
 
 Las tasas exactas (con todos sus decimales) de las dos variantes están en `19_fl_summary.py` y en `ml/results/federated_formal/fl_resumen.csv`.
@@ -707,7 +742,6 @@ Diagnósticos (no forman parte del entrenamiento final): `11_central_check.py` (
 
 ## Pendientes
 
-- Exportar los modelos (`.keras` completo + JSON con preprocesamiento, clases, umbral, versión y métricas de `test`) y publicarlos en una **GitHub Release**, con EfficientNet-B0 marcado como modelo de la app.
 - Confirmar con el profesor la partición ≈ 68/12/20 y el uso de modelos preentrenados.
 - Documento de requerimientos (Cristhian, con Julián como responsable de P-02): registrar en P-02 el mínimo (propuesta: F1 macro ≥ 0,65 en `test`), actualizar RF-08 y RNF-07 con lo medido (P-14) y aclarar los nombres de los conjuntos (ver "Notas para el equipo").
 - Medir el tiempo de inferencia en la t4g.medium real cuando exista el despliegue (D-16) y, si cambia, aplicar la regla del prerregistro.

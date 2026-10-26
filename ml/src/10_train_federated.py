@@ -8,13 +8,16 @@ Descripcion: Entrenamiento con Federated Learning (FedAvg simulado) de un
              val y un checkpoint por ronda para reanudar. NO usa test.
              v1.6: congela TODAS las BatchNorm (antes MobileNet solo 1 de 46) y
              el modelo entrega logits (MobileNet ignoraba activation="softmax").
+             v1.7: --weight-decay (AdamW, de Hyperband) y --jit (XLA; Swin-Tiny
+             no cabe en 8 GB sin XLA con lote 32). La comprobacion de que la tasa
+             se conserva usa tolerancia relativa (redondeo de float32).
 Fecha_creacion: 2026-10-19
-Actualizacion: 2026-10-23
+Actualizacion: 2026-10-26
 Autor: Julian Andres Silvas Morales
-Version: 1.6
+Version: 1.7
 Uso (desde la raiz del repo):
-    python ml/src/10_train_federated.py --model EfficientNet-B0 --rounds 2 \\
-        --local-epochs 1 --lr 1e-4 --tag smoke
+    python ml/src/10_train_federated.py --model EfficientNet-B0 --rounds 10 \\
+        --local-epochs 1 --lr 4.6e-5 --weight-decay 0.01 --clipnorm 1.0 --freeze-bn --tag formal
 """
 import argparse
 import importlib
@@ -55,6 +58,10 @@ ap.add_argument("--local-epochs", type=int, default=1)
 ap.add_argument("--lr", type=float, default=1e-4)
 ap.add_argument("--tag", default="run")
 ap.add_argument("--clipnorm", type=float, default=None)
+ap.add_argument("--weight-decay", type=float, default=0.0,
+                help="weight decay de AdamW (0 = Adam, como antes)")
+ap.add_argument("--jit", action="store_true",
+                help='compila con jit_compile="auto" (XLA): menos memoria (necesario para Swin-Tiny)')
 ap.add_argument("--freeze-bn", action="store_true",
                 help="congela BatchNorm (usa sus estadisticas de ImageNet)")
 args = ap.parse_args()
@@ -141,9 +148,15 @@ if state_f.exists():
     print(f"Reanudando desde la ronda {state['round']} (mejor F1 val {state['best_f1']:.4f})")
 
 # Se compila UNA sola vez: recompilar por cliente costaba ~20 s extra por cliente
-model.compile(optimizer=keras.optimizers.Adam(args.lr, clipnorm=args.clipnorm),
+if args.weight_decay > 0:
+    optimizador = keras.optimizers.AdamW(args.lr, weight_decay=args.weight_decay, clipnorm=args.clipnorm)
+else:
+    optimizador = keras.optimizers.Adam(args.lr, clipnorm=args.clipnorm)
+model.compile(optimizer=optimizador,
               loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-              jit_compile=False)
+              jit_compile="auto" if args.jit else False)
+print(f"Optimizador: {type(optimizador).__name__} | lr {args.lr:g} | weight decay {args.weight_decay:g} | "
+      f"clipnorm {args.clipnorm} | XLA {'si' if args.jit else 'no'}", flush=True)
 
 def reiniciar_optimizador(m):
     """Pone a cero los momentos de Adam y el contador de pasos SIN tocar la tasa
@@ -154,7 +167,8 @@ def reiniciar_optimizador(m):
             continue
         v.assign(tf.zeros_like(v))
     lr_actual = float(m.optimizer.learning_rate)
-    assert abs(lr_actual - args.lr) < 1e-12, f"la tasa de aprendizaje quedo en {lr_actual}"
+    # tolerancia relativa: Keras guarda la tasa en float32 (redondeo ~1e-7 relativo)
+    assert abs(lr_actual - args.lr) <= 1e-6 * args.lr, f"la tasa de aprendizaje quedo en {lr_actual}"
 
 
 # --- FedAvg ----------------------------------------------------------------

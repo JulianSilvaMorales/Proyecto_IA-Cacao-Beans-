@@ -1,0 +1,42 @@
+{
+  "Swin-Tiny": {
+    "run_dir": "~/cacao_runs/formal3_Swin-Tiny",
+    "pesos": "last.weights.h5",
+    "ronda": 15,
+    "lr": 1.869052667601804e-05,
+    "weight_decay": 0.0,
+    "jit": true
+  },
+  "MobileNetV3-L": {
+    "run_dir": "~/cacao_runs/formal_MobileNetV3-L",
+    "pesos": "last.weights.h5",
+    "ronda": 15,
+    "lr": 9.029419725764854e-05,
+    "weight_decay": 0.0,
+    "jit": false
+  },
+  "DeiT-Small": {
+    "run_dir": "~/cacao_runs/formal3_DeiT-Small",
+    "pesos": "last.weights.h5",
+    "ronda": 15,
+    "lr": 3.009806575254951e-05,
+    "weight_decay": 0.0,
+    "jit": false
+  },
+  "EfficientNet-B0": {
+    "run_dir": "~/cacao_runs/formal3_EfficientNet-B0",
+    "pesos": "last.weights.h5",
+    "ronda": 15,
+    "lr": 1.5373837337054e-05,
+    "weight_decay": 0.01,
+    "jit": false
+  },
+  "ResNet-50": {
+    "run_dir": "~/cacao_runs/formal3_ResNet-50",
+    "pesos": "last.weights.h5",
+    "ronda": 15,
+    "lr": 3.009806575254951e-05,
+    "weight_decay": 0.0,
+    "jit": false
+  }
+}

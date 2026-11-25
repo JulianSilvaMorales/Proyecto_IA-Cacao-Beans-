@@ -20,9 +20,9 @@ Descripcion: Ajuste de hiperparametros con Hyperband (keras-tuner) para uno de
              Sin XLA, Swin-Tiny con lote 32 no cabe en los 8 GB de la GPU (OOM en la
              primera epoca); con XLA si cabe. Los demas modelos se ajustaron sin XLA.
 Fecha_creacion: 2026-10-23
-Actualizacion: 2026-10-24
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
-Version: 1.4
+Actualizacion: 2026-11-25
+Autor: Julian Andres Silvas Morales
+Version: 1.5
 Uso (desde la raiz del repo), repitiendo mientras el codigo de salida sea 3:
     until python -u ml/src/17_hyperband.py --model EfficientNet-B0; [ $? -ne 3 ]; do :; done
 """

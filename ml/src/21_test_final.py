@@ -10,9 +10,9 @@ Descripcion: MEDICION FINAL en test (334 granos, 73 mala), que se usa UNA SOLA V
              con imagenes de val). Se niega a ejecutarse si ya existe un resultado
              de test, para garantizar que test se usa una sola vez.
 Fecha_creacion: 2026-10-26
-Actualizacion: 2026-10-26
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
-Version: 1.0
+Actualizacion: 2026-11-25
+Autor: Julian Andres Silvas Morales
+Version: 1.1
 Uso (desde la raiz del repo):
     python -u ml/src/21_test_final.py --solo-tiempos   # 1.o: tiempos en CPU (no lee test)
     python -u ml/src/21_test_final.py                  # 2.o: medicion final en test (una vez)

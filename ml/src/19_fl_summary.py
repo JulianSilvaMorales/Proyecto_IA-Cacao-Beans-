@@ -8,9 +8,9 @@ Descripcion: Resume el entrenamiento federado formal de los 5 modelos. Lee los
              ganadora por modelo y copia los historiales a ml/results/federated_formal/.
              No entrena nada y NO usa test.
 Fecha_creacion: 2026-10-26
-Actualizacion: 2026-10-26
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
-Version: 1.0
+Actualizacion: 2026-11-25
+Autor: Julian Andres Silvas Morales
+Version: 1.1
 Uso (desde la raiz del repo):
     python ml/src/19_fl_summary.py
 """

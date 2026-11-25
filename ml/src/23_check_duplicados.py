@@ -12,8 +12,8 @@ Descripcion: Auditoria de fuga de datos: busca si algun grano de test (334 recor
              probabilidades ya guardadas por 21_test_final.py (no vuelve a predecir).
 Fecha_creacion: 2026-11-25
 Actualizacion: 2026-11-25
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
-Version: 1.0
+Autor: Julian Andres Silvas Morales
+Version: 1.1
 Uso (desde la raiz del repo):
     python -u ml/src/23_check_duplicados.py
     python -u ml/src/23_check_duplicados.py --excluir ml/results/duplicados/repetidos.txt

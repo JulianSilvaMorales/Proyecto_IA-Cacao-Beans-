@@ -4,7 +4,7 @@ Descripcion: Resumen de los resultados de 15_diag_bn_softmax.py (fallo de Mobile
              ~/diag_mobilenet.log (parte B) y ~/diag15_a.log (parte A).
 Fecha_creacion: 2026-10-23
 Actualizacion: 2026-10-23
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
+Autor: Julian Andres Silvas Morales
 Version: 1.0
 
 PARTE A: montaje de los 5 modelos (sin entrenar, lote de 32 de val)

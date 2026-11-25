@@ -10,9 +10,9 @@ Descripcion: Experimento de GAN (Topic 1) para la clase minoritaria. En cada una
              bootstrap de la diferencia de F1 macro. NO usa test y NO cambia
              data/splits/.
 Fecha_creacion: 2026-10-26
-Actualizacion: 2026-10-26
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
-Version: 1.0
+Actualizacion: 2026-11-25
+Autor: Julian Andres Silvas Morales
+Version: 1.1
 Uso (desde la raiz del repo; requiere ~/cacao_runs/cv/EfficientNet-B0_224_oof.npz):
     python -u ml/src/18_gan_cv.py
     python -u ml/src/18_gan_cv.py --folds 1 --gan-steps 50 --epochs 1   # prueba rapida

@@ -8,9 +8,9 @@ Descripcion: Ensembles (Topic 5) con los modelos del entrenamiento federado form
              variantes); hibrido (los 10). Intervalos por bootstrap y diferencia
              pareada frente al mejor modelo individual. No entrena y NO usa test.
 Fecha_creacion: 2026-10-26
-Actualizacion: 2026-10-26
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
-Version: 1.0
+Actualizacion: 2026-11-25
+Autor: Julian Andres Silvas Morales
+Version: 1.1
 Uso (desde la raiz del repo):
     python -u ml/src/20_ensemble.py
 """

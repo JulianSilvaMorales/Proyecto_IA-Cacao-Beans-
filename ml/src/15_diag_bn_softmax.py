@@ -12,9 +12,9 @@ Descripcion: Diagnostico del montaje de los 5 modelos (origen del fallo de
              perdida, P(mala) y la magnitud de lo que llega a la cabeza.
              NO usa test, NO guarda pesos.
 Fecha_creacion: 2026-10-23
-Actualizacion: 2026-10-23
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
-Version: 1.0
+Actualizacion: 2026-11-25
+Autor: Julian Andres Silvas Morales
+Version: 1.1
 Uso (desde la raiz del repo):
     python -u ml/src/15_diag_bn_softmax.py                # parte A, ~2 min
     python -u ml/src/15_diag_bn_softmax.py --entrenar     # parte A + B, ~6 min

@@ -10,9 +10,9 @@ Descripcion: Mide el techo de rendimiento con validacion cruzada estratificada d
              clase mala con augmentation (--oversample). NO usa test y NO cambia
              data/splits/ (las particiones se generan en memoria, semilla 42).
 Fecha_creacion: 2026-10-23
-Actualizacion: 2026-10-23
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
-Version: 1.0
+Actualizacion: 2026-11-25
+Autor: Julian Andres Silvas Morales
+Version: 1.1
 Uso (desde la raiz del repo):
     python -u ml/src/16_cv_ceiling.py --model EfficientNet-B0 --lr 1e-5 --epochs 15
     python -u ml/src/16_cv_ceiling.py --model EfficientNet-B0 --lr 1e-5 --img-size 384

@@ -11,9 +11,9 @@ Descripcion: Exporta los 5 modelos del entrenamiento federado formal (ronda 15) 
              probabilidades que el modelo original en val. NO vuelve a usar test (lee
              sus metricas ya guardadas).
 Fecha_creacion: 2026-10-26
-Actualizacion: 2026-10-26
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
-Version: 1.0
+Actualizacion: 2026-11-25
+Autor: Julian Andres Silvas Morales
+Version: 1.1
 Uso (desde la raiz del repo):
     python -u ml/src/22_export.py
 """
@@ -178,7 +178,7 @@ ejemplo = '''"""
 Nombre: inferencia.py
 Descripcion: Ejemplo de inferencia con un modelo exportado de InspectIA (release modelos-v{v}).
              Prepara un recorte de UN grano igual que el entrenamiento y devuelve P(mala).
-Autor: Julian Andres Silvas Morales (generado con asistencia de Claude)
+Autor: Julian Andres Silvas Morales
 Version: {v}
 Uso:
     python inferencia.py inspectia_EfficientNet-B0_v{v}.keras recorte.jpg

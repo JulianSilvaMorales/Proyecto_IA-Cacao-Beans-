@@ -7,7 +7,7 @@ Descripcion: Documentacion del modulo de IA de InspectIA: datos, particion, pipe
 Fecha_creacion: 2026-10-09
 Actualizacion: 2026-10-26
 Autor: Julian Andres Silvas Morales
-Version: 4.3
+Version: 4.4
 -->
 
 # Clasificación de granos de cacao (Proyecto final IA): InspectIA
@@ -67,6 +67,7 @@ Fuente: Zhinin-Vera, L. et al. (2023). Artificial Vision Technique to Detect and
 | Ensembles (Topic 5) | ✅ no superan al mejor modelo individual | 20 |
 | Prerregistro y medición final en `test` (una sola vez) | ✅ | 21 |
 | Exportar los modelos y publicarlos en la release `modelos-v1.0` | ✅ | 22 |
+| Auditoría de fuga de datos (granos de `test` repetidos en `train` + `val`) | ✅ no se encontraron | 23 |
 
 **Resultado principal:** el **modelo de la app es EfficientNet-B0** (federado, ronda 15), elegido **antes** de mirar `test` con la regla de D-18 (el de mejor F1 en `val` entre los que clasifican un lote de 100 granos en 4 s o menos). En `test` (334 granos, usado una sola vez) logra **F1 macro 0,735 (IC 95 % 0,677–0,792) y exactitud 0,829 (0,787–0,868)**, con recall de `mala` 0,534 y de `sana` 0,912. Los 9 candidatos medidos (5 modelos y 4 ensembles) quedan entre 0,64 y 0,74 con intervalos solapados, en línea con el techo de la validación cruzada (F1 macro ≈ 0,69, IC 95 % ≈ 0,66–0,72). Ninguna palanca probada (5 arquitecturas, 384 px, sobremuestreo, GAN, Hyperband, umbral, ensembles) movió ese techo.
 
@@ -78,6 +79,7 @@ Sobre la meta: el documento de requerimientos no fija un número; RNF-07 remite 
 Proyecto_IA(Cacao-Beans)/              (en Ubuntu: ~/cacao/)
 ├── README.md
 ├── .gitignore                          excluye data/raw/*, data/processed/*, modelos/, __pycache__/, .venv/, *.h5, *.pt, *.pth, *.keras
+├── .venv/                              NO versionado: entorno de Windows (solo para los scripts 00 a 06)
 ├── modelos/                            NO versionado: copia local de los modelos exportados
 │   └── modelos-v1.0/                           los 13 archivos de la release modelos-v1.0 (+ NOTAS_RELEASE.md)
 ├── data/
@@ -105,7 +107,7 @@ Proyecto_IA(Cacao-Beans)/              (en Ubuntu: ~/cacao/)
 │       └── federated/
 │           └── client_0.csv ... client_4.csv   221 filas cada uno (reparto de train)
 └── ml/
-    ├── src/                            scripts numerados 00 a 19 (el 03 se eliminó); ver "Scripts"
+    ├── src/                            scripts numerados 00 a 23 (el 03 se eliminó); ver "Scripts"
     └── results/                        SÍ versionado: resultados livianos
         ├── inventory.csv                       00: inventario del dataset original
         ├── inventory_crops.csv                 04: inventario de los recortes propios
@@ -123,7 +125,8 @@ Proyecto_IA(Cacao-Beans)/              (en Ubuntu: ~/cacao/)
         ├── ensemble/                           20: ensembles en val (ensemble_val.csv, ensemble_val_resumen.txt)
         ├── test_final/                         21: preregistro.txt, tiempos_cpu_*.csv, test_resultados.csv, test_resumen.txt,
         │                                           test_metricas.json y test_usado.txt (marca de que test ya se usó)
-        └── export/manifest.json                22: SHA-256 de los archivos de la release modelos-v1.0
+        ├── export/manifest.json                22: SHA-256 de los archivos de la release modelos-v1.0
+        └── duplicados/                         23: duplicados_resumen.txt, pares_top.csv, pares_top.png
 ```
 
 **Fuera del repo (no se versiona, en Ubuntu):**
@@ -172,6 +175,7 @@ Todos en `ml/src/`, con header (nombre, descripción, fechas, autor, versión), 
 | `20_ensemble.py` | **Ensembles** heterogéneo, homogéneo e híbrido con los modelos federados, solo en `val` | `ml/results/ensemble/` | Ensembles |
 | `21_test_final.py` | **Medición final en `test`, de un solo uso** (se bloquea tras usarse); `--solo-tiempos --hilos N` mide el tiempo por grano en CPU sin leer `test` | `ml/results/test_final/` | Medición final |
 | `22_export.py` | **Exporta los 5 modelos** para la app (`.keras` y SavedModel del modelo de la app), con ficha JSON, `inferencia.py` y verificación | `~/cacao_export/modelos-v1.0/`, `ml/results/export/manifest.json` | Modelos exportados |
+| `23_check_duplicados.py` | **Auditoría de fuga de datos:** busca granos de `test` repetidos en `train` + `val` aunque sea otra foto (no mide modelos); `--excluir` recalcula las métricas de `test` sin los granos marcados | `ml/results/duplicados/` | Medición final (auditoría) |
 
 El script que generó los recortes (`generar_recortes.py`) no está en `ml/src/`: viene dentro de `recortes_script/` (ver "Recortes propios").
 
@@ -606,6 +610,25 @@ Lectura (medido):
 - **Los ensembles no aportan:** el principal (0,691) queda por debajo del mejor individual y es ~15 veces más lento.
 - **Punto débil común: el recall de `mala`.** El modelo de la app encuentra ~53 % de los granos malos, y cuando dice "mala" acierta el 63 % de las veces. Es coherente con la hipótesis de que el exterior del grano no muestra toda la información con la que se asignó la etiqueta (D-17).
 
+### Auditoría de fuga de datos: ¿hay granos de `test` repetidos en `train` o `val`?
+
+**Por qué:** la verificación por md5 de `05_split.py` solo detecta archivos idénticos. Si el mismo grano apareciera en otra foto en `test` y en `train` + `val`, el modelo podría haberlo "memorizado" y el F1 de `test` saldría inflado. `23_check_duplicados.py` (hecho después de la medición; no mide modelos ni cambia resultados) lo revisa:
+
+- **Similitud de características** (EfficientNet-B0 preentrenado en ImageNet, no los modelos del proyecto): cada uno de los 334 recortes de `test` contra los 1300 de `train` + `val`, probando también el recorte de `test` volteado y girado 180° (los recortes dejan el eje largo horizontal).
+- **Calibración:** la misma medida entre granos de `train` + `val`, para saber qué tan parecidos son normalmente dos granos distintos.
+- **Revisión a ojo** de los 30 pares más parecidos (`ml/results/duplicados/pares_top.png`) y de los 4 pares con huella perceptual idéntica.
+
+| Medida | `test` → `train` + `val` | Calibración (entre granos de `train` + `val`) |
+|---|---|---|
+| Similitud con el vecino más parecido: mediana | 0,894 | 0,877 |
+| Similitud con el vecino más parecido: percentil 99 | 0,935 | 0,937 |
+| Similitud con el vecino más parecido: máximo | **0,943** | 0,973 |
+| Granos de `test` por encima del máximo de la calibración | **0** | — |
+
+Resultado (medido): **no se encontraron granos repetidos.** Ningún grano de `test` es más parecido a uno de `train` + `val` de lo que suelen parecerse dos granos distintos entre sí, y los 30 pares más parecidos, revisados a ojo, son granos distintos (forma, grietas y manchas no coinciden; dos granos distintos de `test` llegan a tener como "vecino" el mismo grano de `train`). Así que el F1 de `test` no está inflado por esta causa.
+
+Límites: ningún método da certeza absoluta (un mismo grano con luz o ángulo muy distintos podría escapar). La huella perceptual (pHash) **no sirve** con estas imágenes: todos los recortes son un óvalo oscuro sobre papel gris y 541 de 1300 granos distintos tienen otro a distancia ≤ 5; los 4 pares de `test` con distancia 0 son granos distintos (uno incluso de otra clase). Las fotos originales no traen fecha EXIF, así que no se pudo usar la hora de la toma.
+
 ## Modelos exportados (release modelos-v1.0)
 
 **Descarga:** https://github.com/JulianSilvaMorales/Proyecto_IA-Cacao-Beans-/releases/tag/modelos-v1.0
@@ -709,6 +732,9 @@ python -u ml/src/21_test_final.py         # se niega a correr si existe ml/resul
 
 # Exportación de los 5 modelos (necesita los resultados de test y de 20_ensemble.py)
 python -u ml/src/22_export.py              # -> ~/cacao_export/modelos-v1.0/
+
+# Auditoría de granos repetidos entre test y train+val (no mide modelos)
+python -u ml/src/23_check_duplicados.py
 ```
 
 Las tasas exactas (con todos sus decimales) de las dos variantes están en `19_fl_summary.py` y en `ml/results/federated_formal/fl_resumen.csv`.

@@ -1,0 +1,17 @@
+Nombre: duplicados_resumen.txt
+Descripcion: auditoria de fuga de datos test vs train+val (23_check_duplicados.py v1.0). No mide modelos.
+Fecha: 2026-11-25 13:38 | 0.7 min
+
+Similitud coseno (caracteristicas EfficientNet-B0 ImageNet; maximo sobre original, volteos y giro 180):
+  test -> vecino mas parecido en train+val: mediana 0.894 | p99 0.935 | maximo 0.943
+  calibracion, granos distintos dentro de train+val -> vecino mas parecido: mediana 0.877 | p99 0.937 | maximo 0.973
+  granos de test por encima del maximo de la calibracion (0.973): 0
+
+Huella perceptual (pHash, distancia de Hamming sobre 64 bits al recorte mas cercano):
+  test -> train+val: mediana 4 | minima 0 | granos de test con distancia <= 5: 188
+  calibracion, granos de train+val entre si: mediana 6 | minima 0 | con distancia <= 5: 541 de 1300
+  Si la calibracion tambien da distancias pequenas, el pHash no distingue granos en estas imagenes (todas son un ovalo oscuro sobre papel gris) y no sirve como prueba de duplicado.
+
+EXIF: fecha disponible en 0 de 50 fotos de test de la tabla (las fotos originales no traen fecha: no se puede usar).
+Pares para revisar a ojo: ml/results/duplicados/pares_top.png (30) y pares_top.csv (50).
+Un par es el mismo grano si coinciden forma, grietas y manchas en el mismo lugar (tambien volteado).
